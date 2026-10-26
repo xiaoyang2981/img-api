@@ -1,6 +1,6 @@
 {
   "name": "img-api",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "private": true,
   "description": "自建图床 API：拖拽上传、原图 + WebP 双版本、随机取图接口",
   "type": "module",
