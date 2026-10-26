@@ -284,7 +284,6 @@
         <a class="brand" href="/" id="brandLink">🖼️ <span id="siteName">梦星的小图床</span></a>
         <nav>
             <span class="nav-user" id="navUser" hidden></span>
-            <a href="/docs" id="docsLink">使用文档</a>
             <a href="/login" id="loginLink">登录</a>
             <a href="/register" id="registerLink" class="primary">注册</a>
             <a href="/admin" id="adminLink" hidden>进入后台</a>
@@ -306,6 +305,7 @@
             <div class="actions">
                 <a class="btn primary" href="/register" id="primaryAction">创建账户</a>
                 <a class="btn ghost" href="/login" id="secondaryAction">登录</a>
+                <a class="btn ghost docs" href="/docs" id="docsAction">📖 使用文档</a>
             </div>
 
             <div class="stats">
@@ -344,7 +344,7 @@
     const API = BASE + '/admin/api';
 
     document.getElementById('brandLink').href = BASE + '/';
-    document.getElementById('docsLink').href = BASE + '/docs';
+    document.getElementById('docsAction').href = BASE + '/docs';
     document.getElementById('loginLink').href = BASE + '/login';
     document.getElementById('registerLink').href = BASE + '/register';
     document.getElementById('adminLink').href = BASE + '/admin';

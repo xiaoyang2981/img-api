@@ -173,6 +173,21 @@ html[data-theme="light"] nav button:hover {
 }
 html[data-theme="light"] button.ghost:hover,
 html[data-theme="light"] .btn.ghost:hover { background: var(--panel-hover); }
+
+.btn.docs {
+    border-color: rgba(80, 183, 254, .38);
+    color: var(--accent);
+    background: rgba(80, 183, 254, .07);
+}
+.btn.docs:hover {
+    color: var(--text);
+    background: rgba(80, 183, 254, .14);
+}
+html[data-theme="light"] .btn.docs {
+    color: #0f5f9e;
+    background: #eff8ff;
+    border-color: rgba(22, 119, 200, .3);
+}
 html[data-theme="light"] nav a.primary { color: #fff; }
 html[data-theme="light"] nav a.primary:hover { color: #fff; }
 

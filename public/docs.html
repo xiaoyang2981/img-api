@@ -180,7 +180,6 @@
             <a href="#profile">个人信息</a>
             <a href="#api">API 接入</a>
             <a href="#token">Token 与限流</a>
-            <a href="#admin">管理员指南</a>
             <a href="#faq">常见问题</a>
             <a href="#security">安全须知</a>
         </aside>
@@ -189,7 +188,7 @@
             <section class="doc-hero">
                 <div class="eyebrow">USER GUIDE · IMG-API</div>
                 <h1>使用文档</h1>
-                <p>本文档面向所有访问者、注册用户和站点管理员，按实际操作顺序说明图片浏览、账户注册、上传审核、个人信息管理和 API 接入方式。按照对应章节逐步操作即可完成配置。</p>
+                <p>本文档面向所有访问者、注册用户和 API 使用者，按实际操作顺序说明图片浏览、账户注册、上传审核、个人信息管理和接口接入方式。按照对应章节逐步操作即可完成配置。</p>
                 <div class="hero-actions">
                     <a class="btn primary" href="#quick">开始使用</a>
                     <a class="btn" href="#api">查看 API 接口</a>
@@ -244,16 +243,6 @@
                     <li>忘记密码时，使用登录页的「忘记密码」入口，通过当前绑定邮箱接收验证码并重置密码。</li>
                 </ol>
                 <div class="callout warn"><b>请妥善保管账户信息。</b> 不应将密码、邮箱验证码或 API Token 提供给他人。</div>
-                <h3>身份组说明</h3>
-                <div class="table-wrap">
-                    <table>
-                        <tr><th>身份组</th><th>权限概述</th></tr>
-                        <tr><td><strong>站长</strong></td><td>全部权限，包括站点设置、账户管理、审核、图片管理、端口设置和 Token 封禁管理。</td></tr>
-                        <tr><td><strong>管理员</strong></td><td>审核、图片管理、账户管理和普通设置；不能修改端口等仅站长可改的配置。</td></tr>
-                        <tr><td><strong>审核员</strong></td><td>可访问审核台处理待审核图片，并查看个人信息；不能上传图片。</td></tr>
-                        <tr><td><strong>成员</strong></td><td>登录后可上传图片、管理自己的图片，并查看个人信息。</td></tr>
-                    </table>
-                </div>
             </section>
 
             <section class="doc-section" id="upload">
@@ -327,18 +316,48 @@
                     </table>
                 </div>
 
-                <h3>随机图参数</h3>
+                <h3>随机图接口参数</h3>
+                <p>适用于 <code>/random</code>、<code>/api/v1</code> 和 <code>/api/v1.png</code>。参数通过 URL 查询字符串传递，可以组合使用。</p>
                 <div class="table-wrap">
                     <table>
-                        <tr><th>参数</th><th>取值</th><th>说明</th></tr>
-                        <tr><td><code>tag</code></td><td>如 <code>wolf,dragon</code></td><td>按标签筛选；多个标签默认任意匹配。</td></tr>
-                        <tr><td><code>tagMode</code></td><td><code>any</code> / <code>all</code></td><td>默认 <code>any</code>；<code>all</code> 要求同时包含全部标签。</td></tr>
-                        <tr><td><code>type</code></td><td><code>origin</code> / <code>png</code></td><td><code>origin</code> 强制原图；<code>png</code> 适用于 <code>/api/v1</code> 系列；<code>/random</code> 默认按站点设置返回 WebP 或原图。</td></tr>
-                        <tr><td><code>format</code></td><td><code>json</code></td><td>返回图片信息 JSON，而不是直接跳转或返回字节。</td></tr>
+                        <tr><th>参数</th><th>是否必填</th><th>取值 / 示例</th><th>说明</th></tr>
+                        <tr><td><code>tag</code></td><td>否</td><td><code>wolf</code>、<code>wolf,dragon</code></td><td>按标签筛选。多个标签用英文逗号分隔，标签不区分大小写。</td></tr>
+                        <tr><td><code>tagMode</code></td><td>否</td><td><code>any</code> / <code>all</code></td><td>默认 <code>any</code>（任意一个标签匹配）；<code>all</code> 要求同时包含全部标签。</td></tr>
+                        <tr><td><code>type</code></td><td>否</td><td><code>origin</code> / <code>png</code></td><td><code>origin</code> 强制返回原图；<code>png</code> 用于 <code>/api/v1</code> 系列；<code>/random</code> 默认按站点设置返回 WebP 或原图。</td></tr>
+                        <tr><td><code>format</code></td><td>否</td><td><code>json</code></td><td>返回图片信息 JSON，而不是直接跳转或返回图片字节。</td></tr>
+                        <tr><td><code>token</code></td><td>否</td><td><code>img_xxxxxxxx</code></td><td>API Token。也可以改用 <code>Authorization</code> 或 <code>X-API-Token</code> 请求头。</td></tr>
+                        <tr><td><code>_</code></td><td>否</td><td>任意字符串，如 <code>_=123</code></td><td>缓存刷新参数，仅用于让客户端重新请求，不参与筛选。</td></tr>
+                    </table>
+                </div>
+
+                <h3>列表接口参数</h3>
+                <p>适用于 <code>GET /list</code>。默认需要登录或携带 Token；站长开启公开列表后游客也可以访问。</p>
+                <div class="table-wrap">
+                    <table>
+                        <tr><th>参数</th><th>是否必填</th><th>默认值 / 示例</th><th>说明</th></tr>
+                        <tr><td><code>page</code></td><td>否</td><td><code>1</code></td><td>页码，从 1 开始。</td></tr>
+                        <tr><td><code>pageSize</code></td><td>否</td><td><code>40</code></td><td>每页数量，最大 200。</td></tr>
+                        <tr><td><code>q</code></td><td>否</td><td><code>星空</code></td><td>搜索图片 ID、标题、来源或标签。</td></tr>
+                        <tr><td><code>tag</code></td><td>否</td><td><code>wolf,dragon</code></td><td>按标签筛选；多个标签用英文逗号分隔。</td></tr>
+                        <tr><td><code>tagMode</code></td><td>否</td><td><code>any</code> / <code>all</code></td><td>多标签的匹配方式，默认 <code>any</code>。</td></tr>
+                        <tr><td><code>token</code></td><td>否</td><td><code>img_xxxxxxxx</code></td><td>列表未公开时，可以使用 Token 验证注册用户身份。</td></tr>
                     </table>
                 </div>
 
                 <h3>基础调用示例</h3>
+                <p>以下示例展示了常用参数组合。请将示例地址替换为当前站点地址。</p>
+                <div class="code-block">
+                    <button type="button" class="copy-code">复制</button>
+                    <pre><code><span data-base-url>http://your-host:2618</span>/random?tag=wolf,dragon&tagMode=all&type=origin</code></pre>
+                </div>
+                <div class="code-block">
+                    <button type="button" class="copy-code">复制</button>
+                    <pre><code><span data-base-url>http://your-host:2618</span>/api/v1.png?tag=wolf&token=&lt;TOKEN&gt;</code></pre>
+                </div>
+                <div class="code-block">
+                    <button type="button" class="copy-code">复制</button>
+                    <pre><code><span data-base-url>http://your-host:2618</span>/list?page=1&pageSize=20&tag=wolf&tagMode=any</code></pre>
+                </div>
                 <div class="code-block">
                     <button type="button" class="copy-code">复制</button>
                     <pre><code>&lt;img src="<span data-base-url>http://your-host:2618</span>/random?tag=wolf" alt="随机图片"&gt;</code></pre>
@@ -382,7 +401,6 @@
                         <tr><th>身份</th><th>默认额度</th><th>统计方式</th></tr>
                         <tr><td>游客</td><td>200 次/分钟</td><td>按 IP 地址</td></tr>
                         <tr><td>注册用户</td><td>2000 次/分钟</td><td>按账户</td></tr>
-                        <tr><td>站长</td><td>2,000,000 次/分钟</td><td>系统固定额度</td></tr>
                     </table>
                 </div>
                 <h3>Token 携带方式</h3>
@@ -401,36 +419,6 @@ X-API-Token: &lt;TOKEN&gt;
                 </ul>
                 <div class="callout warn"><b>Token 遗失时：</b> 进入个人信息页，先吊销当前 Token，再点击创建。系统不会保存可再次显示的完整 Token 明文。</div>
                 <p><a class="top-link" href="#profile">查看个人信息与 Token 管理 ↑</a></p>
-            </section>
-
-            <section class="doc-section" id="admin">
-                <h2>管理员指南</h2>
-                <p>以下功能仅对相应身份组开放。管理员操作会影响其他用户和前台展示，请确认对象后再执行。</p>
-                <h3>后台首页 <code>/admin</code></h3>
-                <ul>
-                    <li>上传图片、查看图库、编辑标签/标题/来源、删除图片。</li>
-                    <li>已通过审核的图片卡片下方有「隐藏前台 / 显示前台」按钮。</li>
-                    <li>成员只能管理自己上传的图片；管理员和站长可以管理全部图片。</li>
-                </ul>
-                <h3>审核台 <code>/admin/review</code></h3>
-                <ul>
-                    <li>处理待审核图片，执行通过、拒绝或重新打回待审。</li>
-                    <li>审核结果决定图片能否进入前台图库；前台展示开关是独立设置。</li>
-                </ul>
-                <h3>账户管理 <code>/admin/users</code></h3>
-                <ul>
-                    <li>站长可创建管理员、审核员和成员；管理员只能创建审核员和成员。</li>
-                    <li>可查看账户 Token 尾号、限流触发次数和封禁状态。</li>
-                    <li>可对其他可管理账户执行 Token 封禁、调整封禁时长或解除封禁。</li>
-                    <li>自己的邮箱和密码请在个人信息页修改，账户管理页不提供自助修改。</li>
-                </ul>
-                <h3>图床设置 <code>/admin/setting</code></h3>
-                <ul>
-                    <li>站点名称、公开注册、前台列表、上传大小和 API 速率。</li>
-                    <li>站长额外拥有端口和 SMTP 邮箱配置权限。</li>
-                    <li>Token 临时封禁时长可在此统一调整，默认 12 小时。</li>
-                    <li>SMTP 配置完成后，可以发送测试邮件验证发信是否正常。</li>
-                </ul>
             </section>
 
             <section class="doc-section" id="faq">
@@ -457,7 +445,6 @@ X-API-Token: &lt;TOKEN&gt;
                     <li>不要在不可信页面填写邮箱验证码；验证码只用于当前操作。</li>
                     <li>发现异常请求、Token 泄漏或账户异常时，请及时吊销 Token、修改密码并联系站长。</li>
                     <li>请遵守站点使用规则和当地法律法规，不要利用接口进行高频爬取、攻击或侵权传播。</li>
-                    <li>管理员在执行封禁、隐藏、删除等操作前，应确认目标账户或图片，避免误操作。</li>
                 </ul>
                 <p>如需进一步协助，请联系站点站长或管理员。联系前请准备好账户名、发生时间和相关请求地址，以便快速定位问题。</p>
                 <p><a class="top-link" href="#quick">返回顶部 ↑</a></p>
