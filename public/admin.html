@@ -97,6 +97,7 @@
     .badge.pending { background: rgba(241, 196, 15, .16); color: #ffd75e; }
     .badge.approved { background: rgba(46, 204, 113, .16); color: #6ee7a4; }
     .badge.rejected { background: rgba(231, 76, 60, .18); color: #ff8d80; }
+    .badge.hidden { background: rgba(240, 160, 32, .16); color: #ffbf69; }
     .tags { font-size: .74rem; color: var(--accent); line-height: 1.5; word-break: break-all; }
     .actions { display: flex; gap: 6px; flex-wrap: wrap; }
     .empty { text-align: center; color: var(--muted); padding: 46px 10px; }
@@ -313,7 +314,10 @@
     const badges = (image) => {
         const status = image.status || 'approved';
         return '<span class="badge ' + status + '" title="' + esc(image.reviewNote || '') + '">' +
-            (STATUS_LABELS[status] || status) + '</span>';
+            (STATUS_LABELS[status] || status) + '</span>' +
+            (status === 'approved' && image.visible === false
+                ? '<span class="badge hidden">前台已隐藏</span>'
+                : '');
     };
 
     const renderCards = (images) => {
@@ -330,6 +334,11 @@
                 ? '<button class="mini ghost" data-edit="' + esc(image.id) + '">编辑</button>' +
                   '<button class="mini danger" data-del="' + esc(image.id) + '">删除</button>'
                 : '';
+            const visibility = image.canEdit && (image.status || 'approved') === 'approved'
+                ? '<button class="mini ghost" data-visible="' + esc(image.id) + '" data-next="' +
+                    (image.visible === false ? '1' : '0') + '">' +
+                    (image.visible === false ? '显示前台' : '隐藏前台') + '</button>'
+                : '';
 
             return '<div class="card">' +
                 '<img class="thumb" loading="lazy" src="' + esc(thumb) + '" alt="' + esc(image.id) + '" ' +
@@ -344,6 +353,7 @@
                     '<div class="actions">' +
                         '<button class="mini ghost" data-copy="' + esc(image.url) + '">原图</button>' +
                         (image.webpUrl ? '<button class="mini ghost" data-copy="' + esc(image.webpUrl) + '">WebP</button>' : '') +
+                        visibility +
                         actions +
                     '</div>' +
                 '</div>' +
@@ -542,6 +552,21 @@
     grid.addEventListener('click', async (event) => {
         const target = event.target;
         if (target.dataset.copy) return copy(target.dataset.copy);
+
+        if (target.dataset.visible) {
+            const visible = target.dataset.next === '1';
+            try {
+                await request('/images/' + target.dataset.visible, {
+                    method: 'PATCH',
+                    json: { visible }
+                });
+                toast(visible ? '已在前台展示' : '已从前台隐藏');
+                await load();
+            } catch (error) {
+                toast(error.message, true);
+            }
+            return;
+        }
 
         if (target.dataset.edit) {
             const image = currentImages.find((item) => item.id === target.dataset.edit);

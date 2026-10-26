@@ -58,6 +58,7 @@
     .badge.member { color: #9fe7c0; border-color: rgba(46,204,113,.35); background: rgba(46,204,113,.08); }
     .badge.self { color: #6ee7a4; border-color: rgba(46,204,113,.4); background: rgba(46,204,113,.1); }
     .badge.off { color: #ff9b90; border-color: rgba(231,76,60,.4); background: rgba(231,76,60,.1); }
+    .badge.warn { color: #ffbf69; border-color: rgba(240,160,32,.4); background: rgba(240,160,32,.1); }
     .user .actions { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
     .empty { color: var(--muted); font-size: .86rem; text-align: center; padding: 20px; }
     .toast {
@@ -100,7 +101,7 @@
 
     <div class="panel">
         <h2>账户列表</h2>
-        <p class="hint">自己的邮箱和密码请到<a href="/admin/profile" id="profileHintLink">个人信息</a>页修改；管理员在这里重置密码或设置邮箱仅用于管理其他账户。</p>
+        <p class="hint">自己的邮箱、密码和 API Token 请到<a href="/admin/profile" id="profileHintLink">个人信息</a>页管理；管理员在这里重置密码或设置邮箱仅用于管理其他账户。</p>
         <div class="users" id="users"></div>
     </div>
 
@@ -125,6 +126,7 @@
     let currentUser = null;
     let users = [];
     let assignableRoles = [];
+    let defaultTokenBanHours = 12;
     let toastTimer = null;
 
     const ROLE_LABELS = { owner: '站长', admin: '管理员', moderator: '审核员', member: '成员' };
@@ -189,6 +191,8 @@
             const badges = [
                 '<span class="badge ' + role + '">' + esc(user.roleLabel || labelOf(role)) + '</span>',
                 user.disabled ? '<span class="badge off">已禁用</span>' : '',
+                user.tokenBanned ? '<span class="badge off">Token 已封禁</span>' : '',
+                user.tokenRateLimitHits > 0 ? '<span class="badge warn">限流 ' + esc(user.tokenRateLimitHits) + ' 次</span>' : '',
                 user.isSelf ? '<span class="badge self">当前账户</span>' : ''
             ].join('');
 
@@ -216,12 +220,26 @@
                 ? '<button class="ghost mini" data-email="' + user.id + '">邮箱</button>'
                 : '';
 
+            const tokenBan = manageable && (user.hasApiToken || user.tokenBanned)
+                ? (user.tokenBanned
+                    ? '<button class="ghost mini" data-tokenunban="' + user.id + '">解除封禁</button>' +
+                        '<button class="ghost mini" data-tokenban="' + user.id + '">调整封禁</button>'
+                    : '<button class="ghost mini" data-tokenban="' + user.id + '">封禁 Token</button>')
+                : '';
+
+            const tokenState = user.hasApiToken
+                ? 'Token 尾号 ' + esc(user.apiTokenHint || '-') +
+                    (user.tokenRateLimitHits > 0 ? ' · 限流触发 ' + esc(user.tokenRateLimitHits) + ' 次' : '') +
+                    (user.tokenBanned ? ' · 封禁至 ' + esc(fmtDate(user.tokenBannedUntil)) : '')
+                : 'Token 未创建';
+
             return '<div class="user">' +
                 '<div>' +
                     '<div class="name"><b>' + esc(user.username) + '</b>' + badges + '</div>' +
                     '<div class="sub">' +
                         (user.displayName && user.displayName !== user.username ? '显示名：' + esc(user.displayName) + ' · ' : '') +
                         (user.email ? '邮箱：' + esc(user.email) + ' · ' : '未绑定邮箱 · ') +
+                        tokenState + ' · ' +
                         '图片 ' + user.imageCount + ' 张 · 创建于 ' + esc(fmtDate(user.createdAt)) +
                     '</div>' +
                 '</div>' +
@@ -229,6 +247,7 @@
                     roleSelect +
                     setEmail +
                     reset +
+                    tokenBan +
                     toggle +
                     remove +
                 '</div>' +
@@ -240,6 +259,7 @@
         try {
             const data = await request('/users');
             assignableRoles = Array.isArray(data.assignableRoles) ? data.assignableRoles : [];
+            defaultTokenBanHours = Number(data.tokenBanHours) || 12;
             renderCreateRoles();
             users = data.users;
             render();
@@ -293,7 +313,8 @@
 
     $('users').addEventListener('click', async (event) => {
         const target = event.target;
-        const id = target.dataset.reset || target.dataset.toggle || target.dataset.delete || target.dataset.email;
+        const id = target.dataset.reset || target.dataset.toggle || target.dataset.delete || target.dataset.email ||
+            target.dataset.tokenban || target.dataset.tokenunban;
         if (!id) return;
 
         const user = users.find((item) => String(item.id) === String(id));
@@ -305,6 +326,30 @@
                 if (email === null) return;
                 await request('/users/' + id, { method: 'PATCH', json: { email: email.trim() } });
                 toast('邮箱已更新');
+            } else if (target.dataset.tokenban) {
+                const hoursInput = prompt(
+                    'Token 封禁小时数（默认 ' + defaultTokenBanHours + '）',
+                    String(defaultTokenBanHours)
+                );
+                if (hoursInput === null) return;
+
+                const hours = Number(hoursInput);
+                if (!Number.isFinite(hours) || hours < 1 || hours > 8760) {
+                    toast('封禁时长需为 1–8760 小时', true);
+                    return;
+                }
+
+                await request('/users/' + id, {
+                    method: 'PATCH',
+                    json: { tokenBanned: true, tokenBanHours: hours }
+                });
+                toast('Token 已封禁');
+            } else if (target.dataset.tokenunban) {
+                await request('/users/' + id, {
+                    method: 'PATCH',
+                    json: { tokenBanned: false }
+                });
+                toast('Token 已解封');
             } else if (target.dataset.reset) {
                 const password = prompt('给 ' + user.username + ' 设置新密码（至少 8 位）');
                 if (password === null) return;

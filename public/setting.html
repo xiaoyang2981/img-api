@@ -197,6 +197,36 @@
         </div>
     </div>
 
+    <div class="panel">
+        <h2>API 速率限制</h2>
+
+        <div class="item">
+            <div class="text">
+                <b>游客每分钟 GET 次数</b>
+                <span>按 IP 统计，适用于没有携带 Token、也没有登录的请求。</span>
+            </div>
+            <input type="number" id="rateLimitGuest" min="1" max="1000000">
+        </div>
+
+        <div class="item">
+            <div class="text">
+                <b>注册用户每分钟 GET 次数</b>
+                <span>按账户统计，携带有效 Token 或已登录会话时生效。</span>
+            </div>
+            <input type="number" id="rateLimitUser" min="1" max="1000000">
+        </div>
+
+        <div class="item">
+            <div class="text">
+                <b>Token 临时封禁时长</b>
+                <span>同一 Token 在短时间内多次触碰速率限制后自动封禁的默认时长，单位小时。</span>
+            </div>
+            <input type="number" id="tokenBanHours" min="1" max="8760">
+        </div>
+
+        <p class="hint">统计窗口为 1 分钟；保存后立即生效。站长使用系统固定额度，不在此页显示。账户页可以查看限流触发次数并手动封禁/解封。</p>
+    </div>
+
     <div class="panel" id="emailPanel" hidden>
         <h2>邮箱验证</h2>
 
@@ -294,7 +324,7 @@
             <tr><td><code>/api/v1</code></td><td>直接返回图片字节，不 302，适合无法跟随跳转的客户端；支持同样的标签、<code>type</code> 和 <code>format=json</code> 参数；<code>?type=png</code> 或 <code>/api/v1.png</code> 返回 PNG</td></tr>
             <tr><td><code>/i/{file}</code></td><td>原图，长期缓存</td></tr>
             <tr><td><code>/w/{file}</code></td><td>WebP 版本</td></tr>
-            <tr><td><code>/list</code></td><td>分页列表，需登录（除非开启公开）</td></tr>
+            <tr><td><code>/list</code></td><td>分页列表，需登录或 API Token（除非开启公开）</td></tr>
             <tr><td><code>/info/{id}</code></td><td>单张图片信息</td></tr>
             <tr><td><code>/stats</code></td><td>数量与体积统计</td></tr>
             <tr><td><code>POST /admin/api/upload</code></td><td>上传，使用登录会话或 <code>Authorization: Bearer &lt;token&gt;</code></td></tr>
@@ -357,6 +387,9 @@
         $('allowPublicList').checked = data.allowPublicList;
         $('allowRegistration').checked = data.allowRegistration;
         $('maxUploadMB').value = data.maxUploadMB;
+        $('rateLimitGuest').value = data.rateLimitGuest ?? 200;
+        $('rateLimitUser').value = data.rateLimitUser ?? 2000;
+        $('tokenBanHours').value = data.tokenBanHours ?? 12;
         $('port').value = data.port;
         $('port').disabled = data.canEditPort === false;
         $('portRestricted').hidden = data.canEditPort !== false;
@@ -412,6 +445,9 @@
                     smtpPass: $('smtpPass').value,
                     smtpFrom: $('smtpFrom').value.trim(),
                     maxUploadMB: Number($('maxUploadMB').value),
+                    rateLimitGuest: Number($('rateLimitGuest').value),
+                    rateLimitUser: Number($('rateLimitUser').value),
+                    tokenBanHours: Number($('tokenBanHours').value),
                     port: Number($('port').value)
                 }
             });

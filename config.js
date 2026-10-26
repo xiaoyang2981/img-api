@@ -17,7 +17,10 @@ const DEFAULT_CONFIG = {
     smtpUser: '',
     smtpPass: '',
     smtpFrom: '',
-    maxUploadMB: 20               // 单张图片大小上限
+    maxUploadMB: 20,              // 单张图片大小上限
+    rateLimitGuest: 200,          // 游客 GET 接口每分钟次数
+    rateLimitUser: 2000,          // 注册用户 GET 接口每分钟次数
+    tokenBanHours: 12             // Token 触发滥用限制后的默认封禁小时数
 };
 
 const coerce = {
@@ -33,7 +36,10 @@ const coerce = {
     smtpUser: (value) => String(value ?? '').trim(),
     smtpPass: (value) => String(value ?? ''),
     smtpFrom: (value) => String(value ?? '').trim(),
-    maxUploadMB: (value) => Math.min(500, Math.max(1, Number(value) || 20))
+    maxUploadMB: (value) => Math.min(500, Math.max(1, Number(value) || 20)),
+    rateLimitGuest: (value) => Math.min(1000000, Math.max(1, Number(value) || 200)),
+    rateLimitUser: (value) => Math.min(1000000, Math.max(1, Number(value) || 2000)),
+    tokenBanHours: (value) => Math.min(8760, Math.max(1, Number(value) || 12))
 };
 
 let config = { ...DEFAULT_CONFIG };

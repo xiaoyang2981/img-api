@@ -68,8 +68,8 @@ const serve = async (c, dir, name, mime, cacheOverride = null) => {
 
     let cacheControl = cacheOverride || CACHE_CONTROL;
 
-    // 未通过审核的图片只允许审核员/管理员/站长或上传者本人查看
-    if (image.status !== 'approved') {
+    // 未通过审核或前台隐藏的图片只允许审核员/管理员/站长或上传者本人查看
+    if (image.status !== 'approved' || image.visible === false) {
         const user = getAuthUser(c);
         if (!canViewImage(user, image)) {
             return c.text('Not Found', 404);
@@ -103,7 +103,7 @@ const serve = async (c, dir, name, mime, cacheOverride = null) => {
 
 const selectRandom = (c) => {
     const tags = tagFilter(c);
-    let pool = index.getApproved();
+    let pool = index.getPublicApproved();
 
     if (tags.tags.length) {
         pool = pool.filter((image) => matchesTags(image, tags.tags, tags.mode));
@@ -224,8 +224,9 @@ export const webpHandler = (c) => serve(c, WEBP_DIR, c.req.param('name'), 'image
 // GET /list?page=&pageSize=&q=&tag=&tagMode=any|all
 export const listHandler = async (c) => {
     const config = getConfig();
-    if (!config.allowPublicList && !getAuthUser(c)) {
-        return c.json({ error: true, message: '图片列表未公开，请先登录' }, 401);
+    const rateUser = c.get('rateUser');
+    if (!config.allowPublicList && !getAuthUser(c) && !rateUser) {
+        return c.json({ error: true, message: '图片列表未公开，请先登录或填写 Token' }, 401);
     }
 
     const page = Math.max(1, Number(c.req.query('page')) || 1);
@@ -233,7 +234,7 @@ export const listHandler = async (c) => {
     const keyword = (c.req.query('q') || '').trim().toLowerCase();
     const tags = tagFilter(c);
 
-    let pool = [...index.getApproved()];
+    let pool = [...index.getPublicApproved()];
 
     if (tags.tags.length) {
         pool = pool.filter((image) => matchesTags(image, tags.tags, tags.mode));
@@ -267,7 +268,7 @@ export const infoHandler = (c) => {
         return c.json({ error: true, message: '图片不存在' }, 404);
     }
 
-    if (image.status !== 'approved') {
+    if (image.status !== 'approved' || image.visible === false) {
         const user = getAuthUser(c);
         if (!canViewImage(user, image)) {
             return c.json({ error: true, message: '图片不存在' }, 404);
@@ -279,7 +280,7 @@ export const infoHandler = (c) => {
 
 // GET /stats
 export const statsHandler = (c) => {
-    const data = index.stats();
+    const data = index.publicStats();
     return c.json({
         ...data,
         totalSizeMB: Number((data.totalSize / 1024 / 1024).toFixed(2)),
