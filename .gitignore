@@ -1,9 +1,14 @@
 node_modules/
 
-# 运行时数据：图片和索引不纳入版本管理
+# 运行时数据：数据库、图片和旧版索引不纳入版本管理
 data/config.json
 data/index.json
 data/index.json.tmp
+data/index.json.migrated
+data/img-api.db
+data/img-api.db-wal
+data/img-api.db-shm
+data/img-api.db-journal
 data/images/*
 data/webp/*
 !data/images/.gitkeep

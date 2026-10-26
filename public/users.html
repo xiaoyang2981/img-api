@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>图床账户管理</title>
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+        --bg: #12141a; --panel: rgba(255, 255, 255, .05); --panel-hover: rgba(255, 255, 255, .08);
+        --border: rgba(255, 255, 255, .12); --text: #e8ebf2; --muted: #8b93a7;
+        --accent: #50b7fe; --danger: #e74c3c; --ok: #2ecc71;
+    }
+    body {
+        background: radial-gradient(1200px 600px at 20% -10%, #1b2740 0%, var(--bg) 55%);
+        color: var(--text); font-family: 'Segoe UI', 'Microsoft YaHei', -apple-system, sans-serif;
+        min-height: 100vh; padding: 24px;
+    }
+    a { color: var(--accent); text-decoration: none; }
+    .wrap { max-width: 1040px; margin: 0 auto; }
+    header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 22px; gap: 12px; flex-wrap: wrap; }
+    h1 { font-size: 1.3rem; }
+    .account { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: .82rem; color: var(--muted); }
+    .account .who b { color: var(--ok); }
+    .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 20px; margin-bottom: 18px; }
+    .panel h2 { font-size: .98rem; margin-bottom: 14px; }
+    .create { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    input, select {
+        background: rgba(0,0,0,.25); color: var(--text); border: 1px solid var(--border);
+        border-radius: 9px; padding: 9px 12px; font-size: .86rem; outline: none; font-family: inherit;
+    }
+    input:focus, select:focus { border-color: var(--accent); }
+    input[type=text], input[type=password] { min-width: 170px; }
+    button {
+        background: linear-gradient(45deg, #50b7fe, #3aa7fe); color: #fff; border: none;
+        border-radius: 9px; padding: 9px 16px; font-size: .86rem; cursor: pointer; font-family: inherit;
+    }
+    button.ghost { background: var(--panel); border: 1px solid var(--border); color: var(--text); }
+    button.ghost:hover { background: var(--panel-hover); }
+    button.danger { background: rgba(231,76,60,.16); border: 1px solid rgba(231,76,60,.4); color: #ff8d80; }
+    button.mini { padding: 6px 10px; font-size: .78rem; }
+    button:disabled { opacity: .45; cursor: not-allowed; }
+    .hint { color: var(--muted); font-size: .79rem; line-height: 1.7; margin-top: 12px; }
+    .users { display: flex; flex-direction: column; gap: 10px; }
+    .user {
+        display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap;
+        background: rgba(0,0,0,.16); border: 1px solid rgba(255,255,255,.08);
+        border-radius: 11px; padding: 13px 14px;
+    }
+    .user .name { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .user .name b { font-size: .94rem; }
+    .user .sub { color: var(--muted); font-size: .77rem; margin-top: 5px; }
+    .badge { font-size: .68rem; padding: 2px 8px; border-radius: 99px; border: 1px solid var(--border); color: var(--muted); }
+    .badge.admin { color: #7ec8ff; border-color: rgba(80,183,254,.4); background: rgba(80,183,254,.1); }
+    .badge.self { color: #6ee7a4; border-color: rgba(46,204,113,.4); background: rgba(46,204,113,.1); }
+    .badge.off { color: #ff9b90; border-color: rgba(231,76,60,.4); background: rgba(231,76,60,.1); }
+    .user .actions { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+    .empty { color: var(--muted); font-size: .86rem; text-align: center; padding: 20px; }
+    .toast {
+        position: fixed; left: 50%; bottom: 32px; transform: translate(-50%, 20px);
+        background: #1e2430; border: 1px solid var(--border); padding: 10px 18px; border-radius: 10px;
+        font-size: .86rem; opacity: 0; pointer-events: none; transition: .25s; z-index: 80;
+    }
+    .toast.on { opacity: 1; transform: translate(-50%, 0); }
+    .toast.err { border-color: rgba(231,76,60,.5); color: #ff9d92; }
+</style>
+</head>
+<body>
+<div class="wrap">
+    <header>
+        <h1>👥 账户管理</h1>
+        <div class="account">
+            <span class="who" id="whoami">…</span>
+            <a href="/admin/setting" id="settingLink">设置</a>
+            <a href="/admin" id="backLink">← 返回图库</a>
+            <button class="ghost mini" id="logoutBtn">退出登录</button>
+        </div>
+    </header>
+
+    <div class="panel">
+        <h2>创建账户</h2>
+        <form class="create" id="createForm">
+            <input id="newUsername" type="text" placeholder="用户名（3–32 位）" autocomplete="off" required>
+            <input id="newDisplay" type="text" placeholder="显示名（可选）" autocomplete="off">
+            <input id="newPassword" type="password" placeholder="密码（至少 8 位）" autocomplete="new-password" required>
+            <select id="newRole">
+                <option value="user">成员</option>
+                <option value="admin">管理员</option>
+            </select>
+            <button type="submit">创建</button>
+        </form>
+        <p class="hint">成员可以上传、查看图库，并管理自己上传的图片；管理员还能管理账户和全局设置。不开放自助注册。</p>
+    </div>
+
+    <div class="panel">
+        <h2>账户列表</h2>
+        <div class="users" id="users"></div>
+    </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+    const BASE = location.pathname.replace(/\/admin(\/.*)?$/, '');
+    const API = BASE + '/admin/api';
+    const $ = (id) => document.getElementById(id);
+
+    document.getElementById('settingLink').href = BASE + '/admin/setting';
+    document.getElementById('backLink').href = BASE + '/admin';
+
+    let currentUser = null;
+    let users = [];
+    let toastTimer = null;
+
+    const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (ch) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[ch]));
+
+    const toast = (message, isError = false) => {
+        const el = $('toast');
+        el.textContent = message;
+        el.className = 'toast on' + (isError ? ' err' : '');
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => { el.className = 'toast'; }, 2400);
+    };
+
+    const request = async (path, options = {}) => {
+        const headers = Object.assign({}, options.headers || {});
+        if (options.json !== undefined) {
+            headers['Content-Type'] = 'application/json';
+            options.body = JSON.stringify(options.json);
+        }
+        const response = await fetch(API + path, Object.assign({}, options, {
+            headers,
+            credentials: 'same-origin'
+        }));
+        if (response.status === 401) {
+            location.href = BASE + '/admin/login';
+            throw new Error('登录已过期');
+        }
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.message || ('请求失败 ' + response.status));
+        return data;
+    };
+
+    const fmtDate = (value) => {
+        if (!value) return '-';
+        const date = new Date(value);
+        return Number.isNaN(date.getTime()) ? '-' : date.toLocaleString('zh-CN', { hour12: false });
+    };
+
+    const render = () => {
+        if (!users.length) {
+            $('users').innerHTML = '<div class="empty">还没有账户</div>';
+            return;
+        }
+
+        $('users').innerHTML = users.map((user) => {
+            const badges = [
+                '<span class="badge ' + (user.role === 'admin' ? 'admin' : '') + '">' +
+                    (user.role === 'admin' ? '管理员' : '成员') + '</span>',
+                user.disabled ? '<span class="badge off">已禁用</span>' : '',
+                user.isSelf ? '<span class="badge self">当前账户</span>' : ''
+            ].join('');
+
+            const roleSelect = user.isSelf
+                ? ''
+                : '<select data-role="' + user.id + '">' +
+                    '<option value="user"' + (user.role === 'user' ? ' selected' : '') + '>成员</option>' +
+                    '<option value="admin"' + (user.role === 'admin' ? ' selected' : '') + '>管理员</option>' +
+                  '</select>';
+
+            const toggle = user.isSelf
+                ? ''
+                : '<button class="ghost mini" data-toggle="' + user.id + '">' +
+                    (user.disabled ? '启用' : '禁用') + '</button>';
+
+            const remove = user.isSelf
+                ? ''
+                : '<button class="danger mini" data-delete="' + user.id + '">删除</button>';
+
+            return '<div class="user">' +
+                '<div>' +
+                    '<div class="name"><b>' + esc(user.username) + '</b>' + badges + '</div>' +
+                    '<div class="sub">' +
+                        (user.displayName && user.displayName !== user.username ? '显示名：' + esc(user.displayName) + ' · ' : '') +
+                        '图片 ' + user.imageCount + ' 张 · 创建于 ' + esc(fmtDate(user.createdAt)) +
+                    '</div>' +
+                '</div>' +
+                '<div class="actions">' +
+                    roleSelect +
+                    '<button class="ghost mini" data-reset="' + user.id + '">重置密码</button>' +
+                    toggle +
+                    remove +
+                '</div>' +
+            '</div>';
+        }).join('');
+    };
+
+    const load = async () => {
+        try {
+            const data = await request('/users');
+            users = data.users;
+            render();
+        } catch (error) {
+            toast(error.message, true);
+        }
+    };
+
+    $('createForm').addEventListener('submit', async (event) => {
+        event.preventDefault();
+
+        try {
+            await request('/users', {
+                method: 'POST',
+                json: {
+                    username: $('newUsername').value.trim(),
+                    displayName: $('newDisplay').value.trim(),
+                    password: $('newPassword').value,
+                    role: $('newRole').value
+                }
+            });
+            $('newUsername').value = '';
+            $('newDisplay').value = '';
+            $('newPassword').value = '';
+            $('newRole').value = 'user';
+            toast('账户已创建');
+            await load();
+        } catch (error) {
+            toast(error.message, true);
+        }
+    });
+
+    $('users').addEventListener('change', async (event) => {
+        const select = event.target.closest('[data-role]');
+        if (!select) return;
+
+        try {
+            await request('/users/' + select.dataset.role, {
+                method: 'PATCH',
+                json: { role: select.value }
+            });
+            toast('角色已更新');
+            await load();
+        } catch (error) {
+            toast(error.message, true);
+            await load();
+        }
+    });
+
+    $('users').addEventListener('click', async (event) => {
+        const target = event.target;
+        const id = target.dataset.reset || target.dataset.toggle || target.dataset.delete;
+        if (!id) return;
+
+        const user = users.find((item) => String(item.id) === String(id));
+        if (!user) return;
+
+        try {
+            if (target.dataset.reset) {
+                const password = prompt('给 ' + user.username + ' 设置新密码（至少 8 位）');
+                if (password === null) return;
+                if (password.length < 8) {
+                    toast('密码至少 8 位', true);
+                    return;
+                }
+                await request('/users/' + id, { method: 'PATCH', json: { password } });
+                toast('密码已重置，该账户的其他登录已失效');
+            } else if (target.dataset.toggle) {
+                await request('/users/' + id, { method: 'PATCH', json: { disabled: !user.disabled } });
+                toast(user.disabled ? '账户已启用' : '账户已禁用');
+            } else if (target.dataset.delete) {
+                if (!confirm('确定删除账户 ' + user.username + ' ？图片会保留，但会变成无归属。')) return;
+                await request('/users/' + id, { method: 'DELETE' });
+                toast('账户已删除');
+            }
+
+            await load();
+        } catch (error) {
+            toast(error.message, true);
+        }
+    });
+
+    $('logoutBtn').onclick = async () => {
+        try {
+            await request('/auth/logout', { method: 'POST' });
+        } catch {
+            // 会话已经失效也没关系
+        }
+        location.href = BASE + '/admin/login';
+    };
+
+    const boot = async () => {
+        try {
+            const me = await request('/auth/me');
+            currentUser = me.user;
+            $('whoami').innerHTML = '<b>' + esc(currentUser.displayName || currentUser.username) + '</b>';
+            await load();
+        } catch (error) {
+            toast(error.message, true);
+        }
+    };
+
+    boot();
+</script>
+</body>
+</html>

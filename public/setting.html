@@ -20,6 +20,9 @@
     .wrap { max-width: 820px; margin: 0 auto; }
     header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 22px; gap: 12px; flex-wrap: wrap; }
     h1 { font-size: 1.3rem; }
+    .account { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: .82rem; color: var(--muted); }
+    .account .who b { color: var(--ok); }
+    .account .who .role { color: var(--accent); margin-left: 5px; }
     .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 20px; margin-bottom: 18px; }
     .panel h2 { font-size: .98rem; margin-bottom: 14px; }
     .item { display: flex; justify-content: space-between; gap: 18px; align-items: center; padding: 13px 0; border-bottom: 1px solid rgba(255,255,255,.06); }
@@ -88,7 +91,12 @@
 <div class="wrap">
     <header>
         <h1>⚙️ 图床设置</h1>
-        <a href="./">← 返回图库</a>
+        <div class="account">
+            <span class="who" id="whoami">…</span>
+            <a href="/admin/users" id="usersLink">账户管理</a>
+            <a href="/admin" id="backLink">← 返回图库</a>
+            <button class="ghost mini" id="logoutBtn">退出登录</button>
+        </div>
     </header>
 
     <div class="panel">
@@ -113,7 +121,7 @@
         <div class="item">
             <div class="text">
                 <b>公开发布图片列表</b>
-                <span>关闭时 <code>/list</code> 需要令牌（默认）。打开后任何人都能列出图库，只建议在私密站点使用。</span>
+                <span>关闭时 <code>/list</code> 需要登录（默认）。打开后任何人都能列出图库，只建议在私密站点使用。</span>
             </div>
             <label class="switch"><input type="checkbox" id="allowPublicList"><i></i></label>
         </div>
@@ -136,17 +144,6 @@
     </div>
 
     <div class="panel">
-        <h2>管理令牌</h2>
-        <div class="token-row">
-            <code id="tokenText">••••••••••••</code>
-            <button class="ghost mini" id="revealBtn">显示</button>
-            <button class="ghost mini" id="copyBtn">复制</button>
-            <button class="danger mini" id="regenBtn">重新生成</button>
-        </div>
-        <p class="hint">令牌存在 <code>data/config.json</code>。重新生成后旧令牌立刻失效，需要重新登录后台。</p>
-    </div>
-
-    <div class="panel">
         <div class="save-bar">
             <button class="ghost" id="reloadBtn">重新读取</button>
             <button id="saveBtn">保存设置</button>
@@ -160,21 +157,12 @@
             <tr><td><code>/random</code></td><td>随机一张，302 跳转。<code>?format=json</code> 返回 JSON，<code>?type=origin</code> 取原图，<code>?tag=wolf</code> 按标签（需启用标签），<code>?rating=sfw</code> 按评级</td></tr>
             <tr><td><code>/i/{file}</code></td><td>原图，长期缓存</td></tr>
             <tr><td><code>/w/{file}</code></td><td>WebP 版本</td></tr>
-            <tr><td><code>/list</code></td><td>分页列表，需令牌（除非开启公开）</td></tr>
+            <tr><td><code>/list</code></td><td>分页列表，需登录（除非开启公开）</td></tr>
             <tr><td><code>/info/{id}</code></td><td>单张图片信息</td></tr>
             <tr><td><code>/stats</code></td><td>数量与体积统计</td></tr>
-            <tr><td><code>POST /admin/api/upload</code></td><td>上传，<code>Authorization: Bearer &lt;token&gt;</code></td></tr>
+            <tr><td><code>POST /admin/api/upload</code></td><td>上传，使用登录会话或 <code>Authorization: Bearer &lt;token&gt;</code></td></tr>
         </table>
         <p class="hint">给其他服务用：<code id="randomExample">/random?format=json</code></p>
-    </div>
-</div>
-
-<div class="overlay" id="loginOverlay">
-    <div class="dialog">
-        <h2>需要管理令牌</h2>
-        <p>令牌在服务启动时打印在控制台，也在 <code>data/config.json</code> 里。</p>
-        <input type="password" id="tokenInput" placeholder="粘贴管理令牌" autocomplete="off">
-        <button id="loginBtn">进入设置</button>
     </div>
 </div>
 
@@ -185,7 +173,10 @@
     const API = BASE + '/admin/api';
     const $ = (id) => document.getElementById(id);
 
-    let token = localStorage.getItem('imgapi_token') || '';
+    document.getElementById('backLink').href = BASE + '/admin';
+    document.getElementById('usersLink').href = BASE + '/admin/users';
+
+    let currentUser = null;
     let settings = null;
 
     let toastTimer = null;
@@ -199,15 +190,17 @@
 
     const request = async (path, options = {}) => {
         const headers = Object.assign({}, options.headers || {});
-        if (token) headers['Authorization'] = 'Bearer ' + token;
         if (options.json !== undefined) {
             headers['Content-Type'] = 'application/json';
             options.body = JSON.stringify(options.json);
         }
-        const response = await fetch(API + path, Object.assign({}, options, { headers }));
+        const response = await fetch(API + path, Object.assign({}, options, {
+            headers,
+            credentials: 'same-origin'
+        }));
         if (response.status === 401) {
-            $('loginOverlay').classList.add('on');
-            throw new Error('令牌无效');
+            location.href = BASE + '/admin/login';
+            throw new Error('登录已过期');
         }
         const data = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(data.message || ('请求失败 ' + response.status));
@@ -222,8 +215,6 @@
         $('maxUploadMB').value = data.maxUploadMB;
         $('port').value = data.port;
         $('activePort').textContent = location.port || '80';
-        $('tokenText').textContent = '••••••••••••';
-        $('tokenText').dataset.real = data.token;
         $('randomExample').textContent = location.origin + BASE + '/random?format=json';
     };
 
@@ -231,7 +222,7 @@
         try {
             apply(await request('/settings'));
         } catch (error) {
-            if (token) toast(error.message, true);
+            toast(error.message, true);
         }
     };
 
@@ -256,62 +247,29 @@
 
     $('reloadBtn').onclick = load;
 
-    $('revealBtn').onclick = () => {
-        const el = $('tokenText');
-        const real = el.dataset.real || '';
-        if (el.textContent.includes('•')) {
-            el.textContent = real;
-            $('revealBtn').textContent = '隐藏';
-        } else {
-            el.textContent = '••••••••••••';
-            $('revealBtn').textContent = '显示';
-        }
-    };
-
-    $('copyBtn').onclick = async () => {
+    $('logoutBtn').onclick = async () => {
         try {
-            await navigator.clipboard.writeText($('tokenText').dataset.real || '');
-            toast('令牌已复制');
+            await request('/auth/logout', { method: 'POST' });
         } catch {
-            toast('复制失败，请点「显示」后手动复制', true);
+            // 会话已经失效也没关系
         }
+        location.href = BASE + '/admin/login';
     };
 
-    $('regenBtn').onclick = async () => {
-        if (!confirm('重新生成后旧令牌立即失效，要用新令牌重新登录，确定？')) return;
+    const boot = async () => {
         try {
-            const data = await request('/token', { method: 'POST' });
-            localStorage.setItem('imgapi_token', data.token);
-            token = data.token;
-            $('tokenText').dataset.real = data.token;
-            $('tokenText').textContent = data.token;
-            $('revealBtn').textContent = '隐藏';
-            toast('新令牌已生效，并已保存到本浏览器');
+            const me = await request('/auth/me');
+            currentUser = me.user;
+            $('whoami').innerHTML = '<b>' + String(currentUser.displayName || currentUser.username)
+                .replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]))
+                + '</b><span class="role">管理员</span>';
+            await load();
         } catch (error) {
             toast(error.message, true);
         }
     };
 
-    $('loginBtn').onclick = async () => {
-        const value = $('tokenInput').value.trim();
-        if (!value) return;
-        token = value;
-        try {
-            const data = await request('/settings');
-            localStorage.setItem('imgapi_token', token);
-            $('loginOverlay').classList.remove('on');
-            apply(data);
-        } catch (error) {
-            token = '';
-            toast(error.message, true);
-        }
-    };
-
-    $('tokenInput').addEventListener('keydown', (event) => {
-        if (event.key === 'Enter') $('loginBtn').click();
-    });
-
-    if (token) load(); else $('loginOverlay').classList.add('on');
+    boot();
 </script>
 </body>
 </html>

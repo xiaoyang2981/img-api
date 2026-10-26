@@ -1,7 +1,7 @@
 import { readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { IMAGE_DIR, WEBP_DIR, getConfig } from '../config.js';
-import { checkToken, getToken } from '../lib/auth.js';
+import { getAuthUser } from '../lib/auth.js';
 import { MIME } from '../lib/image.js';
 import * as index from '../lib/index.js';
 
@@ -24,9 +24,10 @@ export const basePath = (c) => {
 export const decorate = (c, image) => {
     const origin = new URL(c.req.url).origin;
     const prefix = basePath(c);
+    const { ownerId, ...rest } = image;
 
     return {
-        ...image,
+        ...rest,
         url: `${origin}${prefix}/i/${image.file}`,
         webpUrl: image.webp ? `${origin}${prefix}/w/${image.webp}` : null
     };
@@ -127,8 +128,8 @@ export const webpHandler = (c) => serve(c, WEBP_DIR, c.req.param('name'), 'image
 // GET /list?page=&pageSize=&q=&tag=&rating=
 export const listHandler = async (c) => {
     const config = getConfig();
-    if (!config.allowPublicList && !checkToken(getToken(c))) {
-        return c.json({ error: true, message: '图片列表未公开，请携带管理令牌' }, 401);
+    if (!config.allowPublicList && !getAuthUser(c)) {
+        return c.json({ error: true, message: '图片列表未公开，请先登录' }, 401);
     }
 
     const page = Math.max(1, Number(c.req.query('page')) || 1);

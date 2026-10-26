@@ -32,8 +32,9 @@
     }
     h1 { font-size: 1.35rem; font-weight: 700; }
     h1 span { color: var(--accent); }
-    .token-state { font-size: .82rem; color: var(--muted); }
-    .token-state b { color: var(--ok); }
+    .account { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: .82rem; color: var(--muted); }
+    .account .who b { color: var(--ok); }
+    .account .who .role { color: var(--accent); margin-left: 5px; }
     .panel {
         background: var(--panel); border: 1px solid var(--border);
         border-radius: 14px; padding: 18px; margin-bottom: 20px;
@@ -131,8 +132,11 @@
 <body>
 <div class="wrap">
     <header>
-        <h1>🖼️ 图床后台 <span>·</span> <a href="setting" class="mini">设置</a></h1>
-        <div class="token-state" id="tokenState">未登录</div>
+        <h1>🖼️ 图床后台 <span>·</span> <a href="admin/setting" id="settingLink" class="mini">设置</a> <a href="admin/users" id="usersLink" class="mini" hidden>账户</a></h1>
+        <div class="account">
+            <span class="who" id="whoami">加载中…</span>
+            <button class="ghost mini" id="logoutBtn">退出登录</button>
+        </div>
     </header>
 
     <div class="panel">
@@ -163,7 +167,6 @@
         </div>
         <div class="right">
             <span class="count" id="count"></span>
-            <button class="ghost" id="logoutBtn">退出令牌</button>
         </div>
     </div>
 
@@ -171,24 +174,13 @@
     <div class="pager" id="pager"></div>
 </div>
 
-<!-- 登录 -->
-<div class="overlay" id="loginOverlay">
-    <div class="dialog">
-        <h2>需要管理令牌</h2>
-        <p>令牌在服务启动时打印在控制台，也保存在 <code>data/config.json</code> 的 <code>adminToken</code> 字段。</p>
-        <input type="password" id="tokenInput" placeholder="粘贴管理令牌" autocomplete="off">
-        <div class="row">
-            <button id="loginBtn">进入后台</button>
-        </div>
-    </div>
-</div>
-
+<div class="toast" id="toast"></div>
 <!-- 编辑 -->
 <div class="overlay" id="editOverlay">
     <div class="dialog">
         <h2>编辑图片信息</h2>
         <input type="hidden" id="editId">
-        <div class="field">
+        <div class="field" id="editTagsField" hidden>
             <label>标签（逗号分隔）</label>
             <input type="text" id="editTags" placeholder="wolf, dragon, artist-name">
         </div>
@@ -215,14 +207,15 @@
     </div>
 </div>
 
-<div class="toast" id="toast"></div>
-
 <script>
     const BASE = location.pathname.replace(/\/admin(\/.*)?$/, '');
     const API = BASE + '/admin/api';
     const RANDOM_URL = location.origin + BASE + '/random';
 
-    let token = localStorage.getItem('imgapi_token') || '';
+    document.getElementById('settingLink').href = BASE + '/admin/setting';
+    document.getElementById('usersLink').href = BASE + '/admin/users';
+
+    let currentUser = null;
     let page = 1;
     let search = '';
     let enableTags = false;
@@ -253,25 +246,21 @@
 
     const request = async (path, options = {}) => {
         const headers = Object.assign({}, options.headers || {});
-        if (token) headers['Authorization'] = 'Bearer ' + token;
         if (options.json !== undefined) {
             headers['Content-Type'] = 'application/json';
             options.body = JSON.stringify(options.json);
         }
-        const response = await fetch(API + path, Object.assign({}, options, { headers }));
+        const response = await fetch(API + path, Object.assign({}, options, {
+            headers,
+            credentials: 'same-origin'
+        }));
         if (response.status === 401) {
-            showLogin();
-            throw new Error('令牌无效或已过期');
+            location.href = BASE + '/admin/login';
+            throw new Error('登录已过期');
         }
         const data = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(data.message || ('请求失败 ' + response.status));
         return data;
-    };
-
-    const showLogin = () => {
-        $('loginOverlay').classList.add('on');
-        $('tokenInput').value = '';
-        $('tokenInput').focus();
     };
 
     const copy = async (text) => {
@@ -297,21 +286,26 @@
         grid.innerHTML = images.map((image) => {
             const thumb = image.webpUrl || image.url;
             const tags = (image.tags || []).join(', ');
+            const owner = image.owner ? '<span>👤 ' + esc(image.owner) + '</span>' : '';
+            const actions = image.canEdit
+                ? '<button class="mini ghost" data-edit="' + esc(image.id) + '">编辑</button>' +
+                  '<button class="mini danger" data-del="' + esc(image.id) + '">删除</button>'
+                : '';
+
             return '<div class="card">' +
                 '<img class="thumb" loading="lazy" src="' + esc(thumb) + '" alt="' + esc(image.id) + '" ' +
                     'onclick="window.open(\'' + esc(image.url) + '\',\'_blank\')">' +
                 '<div class="body">' +
-                    '<div class="meta">' + badges(image) +
+                    '<div class="meta">' + badges(image) + owner +
                         '<span>' + image.width + '×' + image.height + '</span>' +
                         '<span>' + fmtSize(image.size) + '</span>' +
                         (image.webpSize ? '<span>webp ' + fmtSize(image.webpSize) + '</span>' : '<span>无 webp</span>') +
                     '</div>' +
-                    (tags ? '<div class="tags">#' + esc(tags) + '</div>' : '') +
+                    (enableTags && tags ? '<div class="tags">#' + esc(tags) + '</div>' : '') +
                     '<div class="actions">' +
                         '<button class="mini ghost" data-copy="' + esc(image.url) + '">原图</button>' +
                         (image.webpUrl ? '<button class="mini ghost" data-copy="' + esc(image.webpUrl) + '">WebP</button>' : '') +
-                        '<button class="mini ghost" data-edit="' + esc(image.id) + '">编辑</button>' +
-                        '<button class="mini danger" data-del="' + esc(image.id) + '">删除</button>' +
+                        actions +
                     '</div>' +
                 '</div>' +
             '</div>';
@@ -326,11 +320,10 @@
             currentImages = data.images;
             $('count').textContent = '共 ' + data.total + ' 张 · 原图 ' + fmtSize(data.stats.totalSize) +
                 ' · webp ' + fmtSize(data.stats.webpSize);
-            $('tokenState').innerHTML = '已连接 · 令牌 <b>' + esc(token.slice(0, 6)) + '•••</b>';
             renderCards(data.images);
             renderPager(data);
         } catch (error) {
-            if (token) toast(error.message, true);
+            toast(error.message, true);
         }
     };
 
@@ -361,11 +354,14 @@
         try {
             const response = await fetch(API + '/upload', {
                 method: 'POST',
-                headers: { 'Authorization': 'Bearer ' + token },
+                credentials: 'same-origin',
                 body: form
             });
 
-            if (response.status === 401) { showLogin(); throw new Error('令牌无效'); }
+            if (response.status === 401) {
+                location.href = BASE + '/admin/login';
+                throw new Error('登录已过期');
+            }
 
             bar.firstElementChild.style.width = '80%';
             const data = await response.json();
@@ -467,34 +463,14 @@
         }
     };
 
-    $('logoutBtn').onclick = () => {
-        localStorage.removeItem('imgapi_token');
-        token = '';
-        grid.innerHTML = '';
-        $('tokenState').textContent = '未登录';
-        showLogin();
-    };
-
-    $('loginBtn').onclick = async () => {
-        const value = $('tokenInput').value.trim();
-        if (!value) return;
-        token = value;
+    $('logoutBtn').onclick = async () => {
         try {
-            const settings = await request('/settings');
-            localStorage.setItem('imgapi_token', token);
-            $('loginOverlay').classList.remove('on');
-            applySettings(settings);
-            await load();
-            toast('已进入后台');
-        } catch (error) {
-            token = '';
-            toast(error.message, true);
+            await request('/auth/logout', { method: 'POST' });
+        } catch {
+            // 会话已经失效也没关系，直接回登录页
         }
+        location.href = BASE + '/admin/login';
     };
-
-    $('tokenInput').addEventListener('keydown', (event) => {
-        if (event.key === 'Enter') $('loginBtn').click();
-    });
 
     $('editCancel').onclick = () => $('editOverlay').classList.remove('on');
 
@@ -521,16 +497,24 @@
     const applySettings = (settings) => {
         enableTags = !!settings.enableTags;
         $('tags').hidden = !enableTags;
+        $('editTagsField').hidden = !enableTags;
     };
 
     const boot = async () => {
-        if (!token) { showLogin(); return; }
         try {
+            const me = await request('/auth/me');
+            currentUser = me.user;
+            $('whoami').innerHTML = '已登录 · <b>' + esc(currentUser.displayName || currentUser.username) + '</b>' +
+                '<span class="role">' + (currentUser.role === 'admin' ? '管理员' : '成员') + '</span>';
+            $('usersLink').hidden = currentUser.role !== 'admin';
+            $('settingLink').hidden = currentUser.role !== 'admin';
+            $('scanBtn').hidden = currentUser.role !== 'admin';
+
             const settings = await request('/settings');
             applySettings(settings);
             await load();
-        } catch {
-            showLogin();
+        } catch (error) {
+            toast(error.message, true);
         }
     };
 

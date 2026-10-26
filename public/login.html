@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>图床后台 · 登录</title>
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+        --bg: #12141a;
+        --panel: rgba(255, 255, 255, 0.05);
+        --border: rgba(255, 255, 255, 0.12);
+        --text: #e8ebf2;
+        --muted: #8b93a7;
+        --accent: #50b7fe;
+        --danger: #e74c3c;
+    }
+    body {
+        background: radial-gradient(1200px 600px at 20% -10%, #1b2740 0%, var(--bg) 55%);
+        color: var(--text);
+        font-family: 'Segoe UI', 'Microsoft YaHei', -apple-system, sans-serif;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+    }
+    .card {
+        width: min(420px, 100%);
+        background: rgba(23, 26, 34, 0.92);
+        border: 1px solid var(--border);
+        border-radius: 18px;
+        padding: 30px;
+        box-shadow: 0 26px 70px rgba(0, 0, 0, 0.45);
+    }
+    .logo { font-size: 2rem; margin-bottom: 10px; }
+    h1 { font-size: 1.25rem; margin-bottom: 6px; }
+    .sub { color: var(--muted); font-size: .84rem; line-height: 1.7; margin-bottom: 22px; }
+    .field { display: flex; flex-direction: column; gap: 7px; margin-bottom: 14px; }
+    label { font-size: .8rem; color: var(--muted); }
+    input {
+        width: 100%;
+        background: rgba(0, 0, 0, .28);
+        color: var(--text);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 11px 13px;
+        font-size: .92rem;
+        outline: none;
+        font-family: inherit;
+    }
+    input:focus { border-color: var(--accent); }
+    button {
+        width: 100%;
+        background: linear-gradient(45deg, #50b7fe, #3aa7fe);
+        color: #fff;
+        border: none;
+        border-radius: 10px;
+        padding: 11px 16px;
+        font-size: .92rem;
+        font-weight: 600;
+        cursor: pointer;
+        font-family: inherit;
+        margin-top: 4px;
+    }
+    button:hover { filter: brightness(1.08); }
+    button:disabled { opacity: .55; cursor: not-allowed; }
+    .error {
+        display: none;
+        background: rgba(231, 76, 60, .13);
+        border: 1px solid rgba(231, 76, 60, .35);
+        color: #ff9b90;
+        border-radius: 9px;
+        padding: 9px 12px;
+        font-size: .82rem;
+        line-height: 1.6;
+        margin-bottom: 14px;
+    }
+    .error.on { display: block; }
+    .foot { margin-top: 18px; color: var(--muted); font-size: .76rem; line-height: 1.7; text-align: center; }
+    .foot a { color: var(--accent); text-decoration: none; }
+    .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<div class="card">
+    <div class="logo">🖼️</div>
+    <h1 id="title">登录图床后台</h1>
+    <p class="sub" id="subtitle">使用管理员创建的账户登录。</p>
+
+    <div class="error" id="error"></div>
+
+    <form id="form" autocomplete="on">
+        <div class="field">
+            <label for="username">用户名</label>
+            <input id="username" name="username" type="text" autocomplete="username" required>
+        </div>
+        <div class="field">
+            <label for="password">密码</label>
+            <input id="password" name="password" type="password" autocomplete="current-password" required>
+        </div>
+        <div class="field hidden" id="confirmField">
+            <label for="confirm">确认密码</label>
+            <input id="confirm" name="confirm" type="password" autocomplete="new-password">
+        </div>
+        <button id="submitBtn" type="submit">登录</button>
+    </form>
+
+    <p class="foot" id="foot">没有账户？请联系管理员创建。</p>
+</div>
+
+<script>
+    const BASE = location.pathname.replace(/\/admin(\/.*)?$/, '');
+    const API = BASE + '/admin/api';
+
+    const $ = (id) => document.getElementById(id);
+    let setupMode = false;
+    let busy = false;
+
+    const showError = (message) => {
+        const el = $('error');
+        el.textContent = message || '';
+        el.classList.toggle('on', Boolean(message));
+    };
+
+    const request = async (path, options = {}) => {
+        const headers = Object.assign({}, options.headers || {});
+        if (options.json !== undefined) {
+            headers['Content-Type'] = 'application/json';
+            options.body = JSON.stringify(options.json);
+        }
+
+        const response = await fetch(API + path, {
+            ...options,
+            headers,
+            credentials: 'same-origin'
+        });
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+            throw new Error(data.message || ('请求失败 ' + response.status));
+        }
+
+        return data;
+    };
+
+    const applyMode = (setup) => {
+        setupMode = Boolean(setup);
+        $('title').textContent = setupMode ? '初始化管理员' : '登录图床后台';
+        $('subtitle').textContent = setupMode
+            ? '第一次使用，先创建管理员账户。之后可以在后台添加更多账户。'
+            : '使用管理员创建的账户登录。';
+        $('confirmField').classList.toggle('hidden', !setupMode);
+        $('confirm').required = setupMode;
+        $('password').autocomplete = setupMode ? 'new-password' : 'current-password';
+        $('submitBtn').textContent = setupMode ? '创建管理员并进入' : '登录';
+        $('foot').innerHTML = setupMode
+            ? '账户数据保存在 <code>data/img-api.db</code>。'
+            : '没有账户？请联系管理员创建。';
+    };
+
+    $('form').addEventListener('submit', async (event) => {
+        event.preventDefault();
+        if (busy) return;
+
+        showError('');
+        const username = $('username').value.trim();
+        const password = $('password').value;
+
+        if (!username || !password) {
+            showError('请填写用户名和密码');
+            return;
+        }
+        if (setupMode && password !== $('confirm').value) {
+            showError('两次输入的密码不一致');
+            return;
+        }
+        if (setupMode && password.length < 8) {
+            showError('密码至少 8 位');
+            return;
+        }
+
+        busy = true;
+        $('submitBtn').disabled = true;
+
+        try {
+            await request(setupMode ? '/auth/setup' : '/auth/login', {
+                method: 'POST',
+                json: { username, password }
+            });
+            location.href = BASE + '/admin';
+        } catch (error) {
+            showError(error.message);
+            busy = false;
+            $('submitBtn').disabled = false;
+        }
+    });
+
+    const boot = async () => {
+        try {
+            const status = await request('/auth/status');
+            if (status.authenticated) {
+                location.href = BASE + '/admin';
+                return;
+            }
+            applyMode(status.setup);
+        } catch (error) {
+            showError(error.message);
+        }
+        $('username').focus();
+    };
+
+    boot();
+</script>
+</body>
+</html>
