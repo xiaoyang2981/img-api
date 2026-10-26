@@ -137,6 +137,7 @@
         <h1>⚙️ 图床设置</h1>
         <div class="account">
             <span class="who" id="whoami">…</span>
+            <a href="/admin/profile" id="profileLink">个人信息</a>
             <a href="/admin/users" id="usersLink">账户管理</a>
             <a href="/admin" id="backLink">← 返回图库</a>
             <button class="theme-toggle" type="button" data-theme-toggle>☀️</button>
@@ -315,6 +316,7 @@
     const $ = (id) => document.getElementById(id);
 
     document.getElementById('backLink').href = BASE + '/admin';
+    document.getElementById('profileLink').href = BASE + '/admin/profile';
     document.getElementById('usersLink').href = BASE + '/admin/users';
 
     let currentUser = null;

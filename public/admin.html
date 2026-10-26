@@ -152,7 +152,7 @@
 <body>
 <div class="wrap">
     <header>
-        <h1>🖼️ 图床后台 <span>·</span> <a href="/" id="homeLink" class="mini">前台</a> <a href="admin/review" id="reviewLink" class="mini" hidden>审核</a> <a href="admin/setting" id="settingLink" class="mini" hidden>设置</a> <a href="admin/users" id="usersLink" class="mini" hidden>账户</a></h1>
+        <h1>🖼️ 图床后台 <span>·</span> <a href="/" id="homeLink" class="mini">前台</a> <a href="admin/profile" id="profileLink" class="mini">个人信息</a> <a href="admin/review" id="reviewLink" class="mini" hidden>审核</a> <a href="admin/setting" id="settingLink" class="mini" hidden>设置</a> <a href="admin/users" id="usersLink" class="mini" hidden>账户</a></h1>
         <div class="account">
             <span class="who" id="whoami">加载中…</span>
             <button class="theme-toggle" type="button" data-theme-toggle>☀️</button>
@@ -247,6 +247,7 @@
     document.getElementById('settingLink').href = BASE + '/admin/setting';
     document.getElementById('usersLink').href = BASE + '/admin/users';
     document.getElementById('reviewLink').href = BASE + '/admin/review';
+    document.getElementById('profileLink').href = BASE + '/admin/profile';
     document.getElementById('homeLink').href = BASE + '/';
 
     const ROLE_LABELS = { owner: '站长', admin: '管理员', moderator: '审核员', member: '成员' };

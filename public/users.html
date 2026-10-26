@@ -77,6 +77,7 @@
         <h1>👥 账户管理</h1>
         <div class="account">
             <span class="who" id="whoami">…</span>
+            <a href="/admin/profile" id="profileLink">个人信息</a>
             <a href="/admin/setting" id="settingLink">设置</a>
             <a href="/admin" id="backLink">← 返回图库</a>
             <button class="theme-toggle" type="button" data-theme-toggle>☀️</button>
@@ -99,6 +100,7 @@
 
     <div class="panel">
         <h2>账户列表</h2>
+        <p class="hint">自己的邮箱和密码请到<a href="/admin/profile" id="profileHintLink">个人信息</a>页修改；管理员在这里重置密码或设置邮箱仅用于管理其他账户。</p>
         <div class="users" id="users"></div>
     </div>
 
@@ -115,6 +117,8 @@
     const API = BASE + '/admin/api';
     const $ = (id) => document.getElementById(id);
 
+    document.getElementById('profileLink').href = BASE + '/admin/profile';
+    document.getElementById('profileHintLink').href = BASE + '/admin/profile';
     document.getElementById('settingLink').href = BASE + '/admin/setting';
     document.getElementById('backLink').href = BASE + '/admin';
 
@@ -204,11 +208,11 @@
                 ? '<button class="danger mini" data-delete="' + user.id + '">删除</button>'
                 : '';
 
-            const reset = (manageable || user.isSelf)
+            const reset = manageable
                 ? '<button class="ghost mini" data-reset="' + user.id + '">重置密码</button>'
                 : '';
 
-            const setEmail = (manageable || user.isSelf)
+            const setEmail = manageable
                 ? '<button class="ghost mini" data-email="' + user.id + '">邮箱</button>'
                 : '';
 

@@ -43,7 +43,7 @@ $env:PORT=3000; node server.js
 |---|---|
 | **站长** | 最高权限：全部设置（包括端口）、账户管理、审核、图片管理、扫描目录 |
 | **管理员** | 审核、图片管理、账户管理（只能管理审核员和成员）、普通设置；**不能修改端口** |
-| **审核员** | 只能访问审核台和前台，不能上传、不能进入后台其他页面 |
+| **审核员** | 只能访问审核台、个人信息页和前台，不能上传、不能进入后台其他页面 |
 | **成员** | 登录后上传图片、查看共享图库、编辑/删除自己上传的图片 |
 
 - 第一个账户自动成为站长；公开注册的账户固定为成员
@@ -52,6 +52,18 @@ $env:PORT=3000; node server.js
 - 图库是共享的，但**只有审核通过的图片才会进入图库**
 - 登录状态使用 HttpOnly + SameSite=Lax 的会话 Cookie，默认 30 天
 - 连续登录失败 10 次会锁定 15 分钟（按 IP + 用户名）
+
+### 个人信息
+
+所有登录用户都可以访问 `/admin/profile`（`/profile` 也会重定向到这里）：
+
+- 修改显示名；用户名作为账户标识不可修改
+- 首次绑定邮箱：验证码发送到新邮箱，验证后完成绑定
+- 修改已绑定邮箱：验证码发送到当前邮箱，确认后才能改成新邮箱
+- 修改密码：需要当前密码 + 当前邮箱验证码；成功后其他设备的登录会失效
+- 未绑定邮箱时不能修改密码，需要先绑定邮箱
+- 邮箱或密码修改需要 SMTP 已配置；未配置时页面会提示并暂时禁用相关操作
+- 站长/管理员在 `/admin/users` 为其他账户重置密码或设置邮箱；自己的邮箱和密码必须在个人信息页修改
 
 ### 审核流程
 
@@ -72,11 +84,11 @@ $env:PORT=3000; node server.js
 - 开启后，登录页显示「忘记密码？」，通过用户名或邮箱接收验证码重置密码
 - 验证码 10 分钟有效，同一邮箱 60 秒内不能重复发送，最多尝试 5 次
 - 关闭后，注册不需要邮箱，忘记密码功能隐藏
-- 已有账户可以在「账户」页设置/修改邮箱（站长和管理员可管理；本人也可设置自己的邮箱）
+- 用户自己的邮箱在个人信息页绑定或修改；站长/管理员可在账户页为其他账户设置邮箱
 - SMTP 密码/授权码只保存不明文返回，设置页留空表示不修改
 - SMTP 未配置时不能开启邮箱验证，注册页会提示暂不可用
 - 设置页提供「发送测试邮件」按钮，可先保存 SMTP 配置再验证发信是否成功
-- 验证码、密码重置和测试邮件使用统一的品牌化 HTML 模板，并附带纯文本版本
+- 注册验证码、密码重置、个人信息安全验证和测试邮件使用统一的品牌化 HTML 模板，并附带纯文本版本
 
 SMTP 配置保存在 SQLite 的 `settings` 表；QQ/163 邮箱通常需要使用「授权码」而不是登录密码。
 
@@ -125,7 +137,13 @@ SMTP 配置保存在 SQLite 的 `settings` 表；QQ/163 邮箱通常需要使用
 | `POST /admin/api/auth/login` | 用户名 + 密码登录，返回会话令牌 |
 | `POST /admin/api/auth/logout` | 退出登录 |
 | `GET /admin/api/auth/me` | 当前登录账户 |
-| `POST /admin/api/auth/password` | 修改自己的密码 |
+| `GET /admin/api/profile` | 当前账户的个人资料、站点名和邮件服务状态 |
+| `PUT /admin/api/profile` | 修改显示名，body：`{ "displayName": "..." }` |
+| `POST /admin/api/profile/email-code` | 发送邮箱验证码；已绑定邮箱发到当前邮箱，未绑定发到新邮箱，body：`{ "newEmail": "..." }` |
+| `PUT /admin/api/profile/email` | 修改/绑定邮箱，body：`{ "newEmail": "...", "code": "123456" }` |
+| `POST /admin/api/profile/password-code` | 发送密码修改验证码，body：`{ "currentPassword": "..." }` |
+| `PUT /admin/api/profile/password` | 修改密码，body：`{ "currentPassword": "...", "newPassword": "...", "code": "123456" }` |
+| `POST /admin/api/auth/password` | 兼容接口；现在同样需要 `currentPassword` + `newPassword` + 邮箱验证码 `code` |
 
 图片和设置接口（需要登录，写操作按权限校验）：
 
@@ -153,7 +171,7 @@ SMTP 配置保存在 SQLite 的 `settings` 表；QQ/163 邮箱通常需要使用
 |---|---|
 | `GET /admin/api/users` | 账户列表（含图片数量、可分配身份组） |
 | `POST /admin/api/users` | 创建账户：`username`、`password`、`role`、`displayName` |
-| `PATCH /admin/api/users/{id}` | 改角色 / 显示名 / 邮箱 / 禁用 / 重置密码 |
+| `PATCH /admin/api/users/{id}` | 改角色 / 显示名 / 邮箱 / 禁用 / 重置密码；不能修改自己的邮箱或密码 |
 | `DELETE /admin/api/users/{id}` | 删除账户（图片保留，变为无归属） |
 
 ### 命令行上传
