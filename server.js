@@ -12,6 +12,7 @@ import { loadIndex } from './lib/index.js';
 import { adminRoutes } from './routes/admin.js';
 import {
     apiV1Handler,
+    apiV1PngHandler,
     basePath,
     healthHandler,
     imageHandler,
@@ -31,6 +32,8 @@ app.use('*', logger());
 app.get('/random', randomHandler);
 app.get('/api/v1', apiV1Handler);
 app.get('/api/v1/', apiV1Handler);
+app.get('/api/v1.png', apiV1PngHandler);
+app.get('/api/v1/random.png', apiV1PngHandler);
 app.get('/i/:name', imageHandler);
 app.get('/w/:name', webpHandler);
 app.get('/list', listHandler);

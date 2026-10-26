@@ -85,6 +85,8 @@ $env:PORT=3000; node server.js
 | `GET /random?tag=wolf,dragon` | 从带 `wolf` **或** `dragon` 的图片里随机 |
 | `GET /random?tag=wolf,dragon&tagMode=all` | 只从同时带 `wolf` 和 `dragon` 的图片里随机 |
 | `GET /api/v1` | **直接返回图片字节，不 302**；支持同样的 `tag` / `tagMode` / `type` / `format=json` |
+| `GET /api/v1?type=png` | 把选中图片转成 PNG 后直接返回，兼容只支持 PNG 的客户端 |
+| `GET /api/v1.png` | 同上，URL 带 `.png` 后缀，兼容对扩展名敏感的客户端 |
 | `GET /i/{file}` | 原图，`Cache-Control: immutable` |
 | `GET /w/{file}` | WebP 版本 |
 | `GET /list?page=1&pageSize=40&q=&tag=&tagMode=` | 分页列表（默认需要登录） |
@@ -183,6 +185,21 @@ curl "http://localhost:2618/api/v1?format=json"
 ```html
 <img src="http://your-host:2618/api/v1?tag=wolf">
 ```
+
+### HMCL 等不支持 WebP 的客户端
+
+HMCL 支持网络背景图片，HTTP 和 HTTPS 都可以，**没有 HTTPS 不一定是失败原因**。如果 HMCL 不显示：
+
+1. 先用带 `.png` 后缀的地址，避开 WebP 和扩展名识别问题：
+   ```text
+   http://your-host:2618/api/v1.png
+   http://your-host:2618/api/v1?type=png
+   ```
+2. 确认 HMCL 所在机器能访问该地址，并且端口没有被防火墙拦截。
+3. HMCL 默认会缓存网络背景图片，同一个 URL 可能一直使用第一次下载的图；如果一直不显示，可以关闭网络背景缓存，或换一个 URL 参数再试。
+4. 如果仍然失败，查看 HMCL 日志里是否有背景图片加载错误。
+
+`/api/v1.png` 会把图片按首帧转成 PNG，速度比直接返回 WebP 稍慢，但兼容性更好。
 
 ## 设置项
 

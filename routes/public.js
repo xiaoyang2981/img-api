@@ -2,7 +2,7 @@ import { readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { IMAGE_DIR, WEBP_DIR, getConfig } from '../config.js';
 import { getAuthUser } from '../lib/auth.js';
-import { MIME } from '../lib/image.js';
+import { MIME, toPng } from '../lib/image.js';
 import * as index from '../lib/index.js';
 import { canViewImage } from '../lib/roles.js';
 
@@ -164,27 +164,52 @@ export const randomHandler = async (c) => {
     return c.redirect(`${prefix}${target}`, 302);
 };
 
-// GET /api/v1?tag=&tagMode=any|all&type=origin|webp&format=json
+// GET /api/v1?tag=&tagMode=any|all&type=origin|webp|png&format=json
 // 直接返回图片字节，不做 302，适合无法跟随跳转的客户端
-export const apiV1Handler = async (c) => {
+const apiV1 = async (c, forcePng = false) => {
     const image = selectRandom(c);
 
     if (!image) {
         return c.json({ error: true, message: '图库为空，或没有符合筛选条件的图片' }, 404);
     }
 
-    const { file, dir, mime, target } = targetFor(c, image);
-
     if (c.req.query('format') === 'json') {
+        const { target } = targetFor(c, image);
         c.header('Cache-Control', 'no-store');
         return c.json(randomJson(c, image, target));
     }
+
+    const type = forcePng ? 'png' : (c.req.query('type') || '').toLowerCase();
+
+    // 兼容只支持 PNG 的客户端
+    if (type === 'png') {
+        try {
+            const source = await readFile(join(IMAGE_DIR, image.file));
+            const body = await toPng(source);
+
+            return new Response(body, {
+                headers: {
+                    'Content-Type': 'image/png',
+                    'Content-Length': String(body.length),
+                    'Cache-Control': 'no-store',
+                    'X-Image-Id': image.id
+                }
+            });
+        } catch {
+            return c.text('Not Found', 404);
+        }
+    }
+
+    const { file, dir, mime } = targetFor(c, image);
 
     c.header('Cache-Control', 'no-store');
     c.header('X-Image-Id', image.id);
 
     return serve(c, dir, file, mime, 'no-store');
 };
+
+export const apiV1Handler = (c) => apiV1(c, false);
+export const apiV1PngHandler = (c) => apiV1(c, true);
 
 // GET /i/:name —— 原图
 export const imageHandler = (c) => {
