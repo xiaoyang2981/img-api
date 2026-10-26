@@ -20,6 +20,7 @@ import { hashPassword, validatePassword, verifyPassword } from '../lib/password.
 import { isEmail, normalizeEmail } from '../lib/email.js';
 import { clearCode, issueCode, verifyCode } from '../lib/email-codes.js';
 import { isMailConfigured, sendMail } from '../lib/mailer.js';
+import { passwordResetCodeEmail, registrationCodeEmail, smtpTestEmail } from '../lib/mail-templates.js';
 import { ROLES, assignableRoles, canAssignRole, canEditImage, canManageUser, canReview, roleLabel } from '../lib/roles.js';
 import * as db from '../lib/db.js';
 import * as index from '../lib/index.js';
@@ -267,8 +268,7 @@ adminRoutes.post('/api/auth/register-code', async (c) => {
     try {
         await sendMail({
             to: email,
-            subject: `${config.siteName} 注册验证码`,
-            text: `你的注册验证码是：${code}\n\n10 分钟内有效。如果不是你本人操作，请忽略这封邮件。`
+            ...registrationCodeEmail({ siteName: config.siteName, code })
         });
     } catch (error) {
         clearCode('register', email);
@@ -305,8 +305,7 @@ adminRoutes.post('/api/auth/forgot-password', async (c) => {
         try {
             await sendMail({
                 to: user.email,
-                subject: `${config.siteName} 密码重置验证码`,
-                text: `${user.username}，你的密码重置验证码是：${code}\n\n10 分钟内有效。如果不是你本人操作，请忽略这封邮件。`
+                ...passwordResetCodeEmail({ siteName: config.siteName, username: user.username, code })
             });
         } catch (error) {
             clearCode('reset', user.email);
@@ -463,8 +462,12 @@ adminRoutes.post('/api/settings/test-email', requireRoles('owner'), async (c) =>
     try {
         await sendMail({
             to,
-            subject: `${config.siteName} SMTP 测试邮件`,
-            text: `这是一封来自 ${config.siteName} 的测试邮件。\n\n如果你收到这封信，说明 SMTP 配置可以正常发信。`
+            ...smtpTestEmail({
+                siteName: config.siteName,
+                smtpHost: config.smtpHost,
+                smtpPort: config.smtpPort,
+                smtpSecure: config.smtpSecure
+            })
         });
     } catch (error) {
         console.error('测试邮件发送失败:', error.message);
