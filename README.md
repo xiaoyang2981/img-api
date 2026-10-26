@@ -64,6 +64,20 @@ $env:PORT=3000; node server.js
 
 后台选择或拖入图片后不会立即上传，会先弹出确认框，显示待上传缩略图、标签、标题和来源；点「确认上传」后才真正开始上传。
 
+### 邮箱验证
+
+站长可以在 `/admin/setting` 的「邮箱验证」面板开启此功能，并配置 SMTP：
+
+- 开启后，公开注册必须填写邮箱并输入邮箱验证码
+- 开启后，登录页显示「忘记密码？」，通过用户名或邮箱接收验证码重置密码
+- 验证码 10 分钟有效，同一邮箱 60 秒内不能重复发送，最多尝试 5 次
+- 关闭后，注册不需要邮箱，忘记密码功能隐藏
+- 已有账户可以在「账户」页设置/修改邮箱（站长和管理员可管理；本人也可设置自己的邮箱）
+- SMTP 密码/授权码只保存不明文返回，设置页留空表示不修改
+- SMTP 未配置时不能开启邮箱验证，注册页会提示暂不可用
+
+SMTP 配置保存在 SQLite 的 `settings` 表；QQ/163 邮箱通常需要使用「授权码」而不是登录密码。
+
 ## 前台
 
 - `/` 公开首页：左侧介绍 + 登录/注册按钮，右侧随机图片
@@ -101,8 +115,11 @@ $env:PORT=3000; node server.js
 | 接口 | 说明 |
 |---|---|
 | `POST /admin/api/auth/setup` | 首次初始化站长，仅在账户表为空时可用 |
-| `GET /admin/api/auth/status` | 登录状态、是否已初始化、是否允许注册 |
-| `POST /admin/api/auth/register` | 公开注册（需开启允许注册，注册账户固定为成员） |
+| `GET /admin/api/auth/status` | 登录状态、是否已初始化、是否允许注册、是否开启邮箱验证 |
+| `POST /admin/api/auth/register` | 公开注册（需开启允许注册；开启邮箱验证时需提供 `email` + `code`） |
+| `POST /admin/api/auth/register-code` | 发送注册邮箱验证码，body：`{ "email": "..." }` |
+| `POST /admin/api/auth/forgot-password` | 发送密码重置验证码，body：`{ "identifier": "用户名或邮箱" }` |
+| `POST /admin/api/auth/reset-password` | 重置密码，body：`{ "identifier": "...", "code": "123456", "newPassword": "..." }` |
 | `POST /admin/api/auth/login` | 用户名 + 密码登录，返回会话令牌 |
 | `POST /admin/api/auth/logout` | 退出登录 |
 | `GET /admin/api/auth/me` | 当前登录账户 |
@@ -133,7 +150,7 @@ $env:PORT=3000; node server.js
 |---|---|
 | `GET /admin/api/users` | 账户列表（含图片数量、可分配身份组） |
 | `POST /admin/api/users` | 创建账户：`username`、`password`、`role`、`displayName` |
-| `PATCH /admin/api/users/{id}` | 改角色 / 显示名 / 禁用 / 重置密码 |
+| `PATCH /admin/api/users/{id}` | 改角色 / 显示名 / 邮箱 / 禁用 / 重置密码 |
 | `DELETE /admin/api/users/{id}` | 删除账户（图片保留，变为无归属） |
 
 ### 命令行上传
@@ -213,10 +230,17 @@ HMCL 支持网络背景图片，HTTP 和 HTTPS 都可以，**没有 HTTPS 不一
 | `randomPreferWebp` | `true` | `/random` 默认跳 WebP |
 | `allowPublicList` | `false` | `/list` 是否需要登录 |
 | `allowRegistration` | `true` | 是否允许前台公开注册；关闭后注册按钮隐藏，接口返回 403 |
+| `enableEmailVerification` | `false` | 开启后注册必须邮箱验证码，忘记密码通过邮箱重置（仅站长可改） |
+| `smtpHost` | 空 | SMTP 主机（仅站长可改） |
+| `smtpPort` | `587` | SMTP 端口（仅站长可改） |
+| `smtpSecure` | `false` | SMTP 使用 SSL/TLS（仅站长可改） |
+| `smtpUser` | 空 | SMTP 用户名（仅站长可改） |
+| `smtpPass` | 空 | SMTP 密码/授权码，只保存不回传（仅站长可改） |
+| `smtpFrom` | 空 | 发件地址（仅站长可改） |
 | `maxUploadMB` | `20` | 单张上限 |
 | `port` | `2618` | 端口（`PORT` 环境变量优先；仅站长可修改） |
 
-标签功能默认关闭；需要按标签筛选时再到设置里打开。
+标签始终启用；`/random` 和 `/list` 都支持按标签筛选。
 
 ## 数据与备份
 

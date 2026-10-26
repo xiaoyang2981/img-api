@@ -155,6 +155,68 @@
         </div>
     </div>
 
+    <div class="panel" id="emailPanel" hidden>
+        <h2>邮箱验证</h2>
+
+        <div class="item">
+            <div class="text">
+                <b>开启邮箱验证</b>
+                <span>开启后注册必须填写邮箱并验证验证码；忘记密码通过邮箱验证码重置。关闭时注册不需要邮箱。</span>
+            </div>
+            <label class="switch"><input type="checkbox" id="enableEmailVerification"><i></i></label>
+        </div>
+
+        <div class="item">
+            <div class="text">
+                <b>SMTP 主机</b>
+                <span>例如 <code>smtp.qq.com</code>、<code>smtp.163.com</code>。</span>
+            </div>
+            <input type="text" id="smtpHost" placeholder="smtp.example.com" style="width:220px;">
+        </div>
+
+        <div class="item">
+            <div class="text">
+                <b>SMTP 端口</b>
+                <span>常见：587（STARTTLS）或 465（SSL）。</span>
+            </div>
+            <input type="number" id="smtpPort" min="1" max="65535" style="width:120px;">
+        </div>
+
+        <div class="item">
+            <div class="text">
+                <b>SSL / TLS</b>
+                <span>465 端口通常需要开启；587 端口通常关闭并使用 STARTTLS。</span>
+            </div>
+            <label class="switch"><input type="checkbox" id="smtpSecure"><i></i></label>
+        </div>
+
+        <div class="item">
+            <div class="text">
+                <b>SMTP 用户名</b>
+                <span>通常就是邮箱地址；不需要认证时可留空。</span>
+            </div>
+            <input type="text" id="smtpUser" placeholder="you@example.com" style="width:220px;">
+        </div>
+
+        <div class="item">
+            <div class="text">
+                <b>SMTP 密码 / 授权码</b>
+                <span>QQ、163 等邮箱通常需要填写“授权码”，不是登录密码。</span>
+            </div>
+            <input type="password" id="smtpPass" placeholder="留空表示不修改" autocomplete="new-password" style="width:220px;">
+        </div>
+
+        <div class="item">
+            <div class="text">
+                <b>发件地址</b>
+                <span>收件人看到的发件人，例如 <code>图床 &lt;you@example.com&gt;</code>。</span>
+            </div>
+            <input type="text" id="smtpFrom" placeholder="you@example.com" style="width:220px;">
+        </div>
+
+        <p class="hint" id="emailConfigHint">SMTP 尚未配置。</p>
+    </div>
+
     <div class="panel">
         <div class="save-bar">
             <button class="ghost" id="reloadBtn">重新读取</button>
@@ -236,6 +298,21 @@
         $('port').disabled = data.canEditPort === false;
         $('portRestricted').hidden = data.canEditPort !== false;
         $('activePort').textContent = location.port || '80';
+
+        $('emailPanel').hidden = data.canEditEmail !== true;
+        $('enableEmailVerification').checked = Boolean(data.enableEmailVerification);
+        $('smtpHost').value = data.smtpHost || '';
+        $('smtpPort').value = data.smtpPort || 587;
+        $('smtpSecure').checked = Boolean(data.smtpSecure);
+        $('smtpUser').value = data.smtpUser || '';
+        $('smtpPass').value = '';
+        $('smtpPass').placeholder = data.smtpPassSet ? '已设置，留空不修改' : 'SMTP 密码 / 授权码';
+        $('smtpFrom').value = data.smtpFrom || '';
+        $('emailConfigHint').textContent = data.emailConfigured
+            ? 'SMTP 已配置。开启后注册必须邮箱验证码，忘记密码会发送邮件。'
+            : 'SMTP 尚未配置。配置并保存后才能开启邮箱验证。';
+        $('emailConfigHint').style.color = data.emailConfigured ? '' : '#ffb86b';
+
         $('randomExample').textContent = location.origin + BASE + '/random?format=json';
         document.title = (data.siteName || '梦星的小图床') + ' · 设置';
         document.querySelectorAll('[data-footer-site]').forEach((el) => {
@@ -260,6 +337,13 @@
                     randomPreferWebp: $('randomPreferWebp').checked,
                     allowPublicList: $('allowPublicList').checked,
                     allowRegistration: $('allowRegistration').checked,
+                    enableEmailVerification: $('enableEmailVerification').checked,
+                    smtpHost: $('smtpHost').value.trim(),
+                    smtpPort: Number($('smtpPort').value),
+                    smtpSecure: $('smtpSecure').checked,
+                    smtpUser: $('smtpUser').value.trim(),
+                    smtpPass: $('smtpPass').value,
+                    smtpFrom: $('smtpFrom').value.trim(),
                     maxUploadMB: Number($('maxUploadMB').value),
                     port: Number($('port').value)
                 }

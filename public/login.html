@@ -39,6 +39,15 @@
     .sub { color: var(--muted); font-size: .84rem; line-height: 1.7; margin-bottom: 22px; }
     .field { display: flex; flex-direction: column; gap: 7px; margin-bottom: 14px; }
     label { font-size: .8rem; color: var(--muted); }
+    .code-row { display: flex; gap: 8px; align-items: stretch; }
+    .code-row input { flex: 1; min-width: 0; }
+    .code-row button {
+        width: auto;
+        margin: 0;
+        padding: 0 12px;
+        font-size: .8rem;
+        white-space: nowrap;
+    }
     input {
         width: 100%;
         background: rgba(0, 0, 0, .28);
@@ -118,15 +127,26 @@
 
     <form id="form" autocomplete="on">
         <div class="field">
-            <label for="username">用户名</label>
+            <label for="username" id="usernameLabel">用户名</label>
             <input id="username" name="username" type="text" autocomplete="username" required>
+        </div>
+        <div class="field hidden" id="emailField">
+            <label for="email">邮箱</label>
+            <input id="email" name="email" type="email" autocomplete="email">
+        </div>
+        <div class="field hidden" id="codeField">
+            <label for="code">邮箱验证码</label>
+            <div class="code-row">
+                <input id="code" name="code" type="text" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="6 位验证码">
+                <button type="button" id="sendCodeBtn">发送验证码</button>
+            </div>
         </div>
         <div class="field hidden" id="displayNameField">
             <label for="displayName">显示名（可选）</label>
             <input id="displayName" name="displayName" type="text" autocomplete="nickname">
         </div>
         <div class="field">
-            <label for="password">密码</label>
+            <label for="password" id="passwordLabel">密码</label>
             <input id="password" name="password" type="password" autocomplete="current-password" required>
         </div>
         <div class="field hidden" id="confirmField">
@@ -151,6 +171,8 @@
     const $ = (id) => document.getElementById(id);
     let mode = 'login';
     let allowRegistration = true;
+    let emailVerification = false;
+    let emailConfigured = false;
     let siteName = '梦星的小图床';
     let busy = false;
 
@@ -198,34 +220,56 @@
 
         const isSetup = mode === 'setup';
         const isRegister = mode === 'register';
-        const needsConfirm = isSetup || isRegister;
+        const isReset = mode === 'reset';
+        const needsConfirm = isSetup || isRegister || isReset;
+        const needsEmail = isRegister && emailVerification;
+        const needsCode = needsEmail || isReset;
 
-        $('title').textContent = isSetup ? '初始化站长' : (isRegister ? '注册账户' : '登录图床');
+        $('title').textContent = isSetup
+            ? '初始化站长'
+            : (isRegister ? '注册账户' : (isReset ? '重置密码' : '登录图床'));
         $('subtitle').textContent = isSetup
             ? '第一次使用，先创建站长账户。'
             : (isRegister
-                ? '注册后即可上传图片、管理自己的作品。'
-                : '使用你的账户登录，管理图床和图片。');
-        document.title = siteName + ' · ' + (isSetup ? '初始化' : (isRegister ? '注册' : '登录'));
+                ? (emailVerification ? '注册需要邮箱验证码，验证后即可登录。' : '注册后即可上传图片、管理自己的作品。')
+                : (isReset
+                    ? '输入用户名或邮箱，获取验证码后设置新密码。'
+                    : '使用你的账户登录，管理图床和图片。'));
+        document.title = siteName + ' · ' + (isSetup ? '初始化' : (isRegister ? '注册' : (isReset ? '重置密码' : '登录')));
 
+        $('usernameLabel').textContent = isReset ? '用户名或邮箱' : '用户名';
         $('displayNameField').classList.toggle('hidden', !isRegister);
+        $('emailField').classList.toggle('hidden', !needsEmail);
+        $('codeField').classList.toggle('hidden', !needsCode);
+        $('email').required = needsEmail;
+        $('code').required = needsCode;
         $('confirmField').classList.toggle('hidden', !needsConfirm);
         $('confirm').required = needsConfirm;
+        $('passwordLabel').textContent = isReset ? '新密码' : '密码';
         $('password').autocomplete = needsConfirm ? 'new-password' : 'current-password';
-        $('submitBtn').textContent = isSetup ? '创建站长并进入' : (isRegister ? '注册并登录' : '登录');
+        $('submitBtn').textContent = isSetup
+            ? '创建站长并进入'
+            : (isRegister ? '注册并登录' : (isReset ? '重置密码' : '登录'));
 
         $('form').hidden = false;
+        showError('');
+        showNotice('');
 
-        if (isRegister) {
-            setSwitch(allowRegistration
-                ? '已有账户？<a href="' + BASE + '/login">去登录</a>'
-                : '');
-        } else if (!isSetup) {
-            setSwitch(allowRegistration
+        if (isSetup) {
+            setSwitch('');
+        } else if (isRegister) {
+            setSwitch('已有账户？<a href="' + BASE + '/login">去登录</a>');
+        } else if (isReset) {
+            setSwitch('<a href="#" data-action="login">返回登录</a>');
+        } else {
+            const lines = [];
+            lines.push(allowRegistration
                 ? '还没有账户？<a href="' + BASE + '/register">注册一个</a>'
                 : '注册暂未开放，请联系站长或管理员创建账户');
-        } else {
-            setSwitch('');
+            if (emailVerification && emailConfigured) {
+                lines.push('<a href="#" data-action="forgot">忘记密码？</a>');
+            }
+            setSwitch(lines.join('<br>'));
         }
     };
 
@@ -243,39 +287,153 @@
         return BASE + '/admin';
     };
 
+    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    const startCooldown = () => {
+        const button = $('sendCodeBtn');
+        let left = 60;
+        button.disabled = true;
+        button.textContent = left + 's';
+
+        const timer = setInterval(() => {
+            left -= 1;
+            if (left <= 0) {
+                clearInterval(timer);
+                button.disabled = false;
+                button.textContent = '发送验证码';
+            } else {
+                button.textContent = left + 's';
+            }
+        }, 1000);
+    };
+
+    $('sendCodeBtn').onclick = async () => {
+        showError('');
+        showNotice('');
+
+        try {
+            if (mode === 'register') {
+                const email = $('email').value.trim();
+                if (!emailPattern.test(email)) {
+                    showError('请输入正确的邮箱地址');
+                    return;
+                }
+                await request('/auth/register-code', { method: 'POST', json: { email } });
+                showNotice('验证码已发送，请查收邮箱（包括垃圾箱）。');
+            } else if (mode === 'reset') {
+                const identifier = $('username').value.trim();
+                if (!identifier) {
+                    showError('请先填写用户名或邮箱');
+                    return;
+                }
+                await request('/auth/forgot-password', { method: 'POST', json: { identifier } });
+                showNotice('如果账户绑定了邮箱，验证码已经发送，请查收。');
+            } else {
+                return;
+            }
+
+            startCooldown();
+        } catch (error) {
+            showError(error.message);
+        }
+    };
+
+    $('switchLine').addEventListener('click', (event) => {
+        const action = event.target.closest('[data-action]')?.dataset.action;
+        if (!action) return;
+
+        event.preventDefault();
+        if (action === 'forgot') applyMode('reset');
+        if (action === 'login') applyMode('login');
+    });
+
     $('form').addEventListener('submit', async (event) => {
         event.preventDefault();
         if (busy) return;
 
         showError('');
+        showNotice('');
+
         const username = $('username').value.trim();
         const password = $('password').value;
         const displayName = $('displayName').value.trim();
+        const isSetup = mode === 'setup';
+        const isRegister = mode === 'register';
+        const isReset = mode === 'reset';
+        const needsConfirm = isSetup || isRegister || isReset;
 
         if (!username || !password) {
             showError('请填写用户名和密码');
             return;
         }
-        if ((mode === 'setup' || mode === 'register') && password !== $('confirm').value) {
+        if (needsConfirm && password !== $('confirm').value) {
             showError('两次输入的密码不一致');
             return;
         }
-        if ((mode === 'setup' || mode === 'register') && password.length < 8) {
+        if (needsConfirm && password.length < 8) {
             showError('密码至少 8 位');
             return;
         }
 
         const payload = { username, password };
-        if (mode === 'register') payload.displayName = displayName;
 
-        const endpoint = mode === 'setup'
+        if (isRegister) {
+            payload.displayName = displayName;
+
+            if (emailVerification) {
+                const email = $('email').value.trim();
+                const code = $('code').value.trim();
+
+                if (!emailPattern.test(email)) {
+                    showError('请输入正确的邮箱地址');
+                    return;
+                }
+                if (!/^\d{6}$/.test(code)) {
+                    showError('请输入 6 位邮箱验证码');
+                    return;
+                }
+
+                payload.email = email;
+                payload.code = code;
+            }
+        }
+
+        if (isReset) {
+            const code = $('code').value.trim();
+            if (!/^\d{6}$/.test(code)) {
+                showError('请输入 6 位邮箱验证码');
+                return;
+            }
+
+            payload.identifier = username;
+            payload.code = code;
+            payload.newPassword = password;
+            delete payload.username;
+            delete payload.password;
+        }
+
+        const endpoint = isSetup
             ? '/auth/setup'
-            : (mode === 'register' ? '/auth/register' : '/auth/login');
+            : (isRegister ? '/auth/register' : (isReset ? '/auth/reset-password' : '/auth/login'));
 
         busy = true;
         $('submitBtn').disabled = true;
 
         try {
+            if (isReset) {
+                await request(endpoint, { method: 'POST', json: payload });
+                applyMode('login');
+                $('username').value = username.includes('@') ? '' : username;
+                $('password').value = '';
+                $('confirm').value = '';
+                $('code').value = '';
+                showNotice('密码已重置，请使用新密码登录。');
+                busy = false;
+                $('submitBtn').disabled = false;
+                $('password').focus();
+                return;
+            }
+
             const result = await request(endpoint, { method: 'POST', json: payload });
             const next = new URLSearchParams(location.search).get('next');
 
@@ -295,6 +453,8 @@
         try {
             const status = await request('/auth/status');
             allowRegistration = status.allowRegistration !== false;
+            emailVerification = Boolean(status.enableEmailVerification);
+            emailConfigured = Boolean(status.emailConfigured);
             siteName = status.siteName || siteName;
             document.querySelectorAll('[data-footer-site]').forEach((el) => {
                 el.textContent = siteName;
@@ -323,6 +483,14 @@
                     applyUnavailable(
                         '注册暂未开放',
                         '站长或管理员关闭了公开注册，请联系站长或管理员创建账户。',
+                        '<a href="' + BASE + '/login">去登录</a>'
+                    );
+                    return;
+                }
+                if (emailVerification && !emailConfigured) {
+                    applyUnavailable(
+                        '邮箱验证暂不可用',
+                        '邮箱验证已经开启，但 SMTP 尚未配置，暂时无法注册。',
                         '<a href="' + BASE + '/login">去登录</a>'
                     );
                     return;
