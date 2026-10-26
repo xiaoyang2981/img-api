@@ -7,7 +7,7 @@ import os from 'node:os';
 import { getPort, initConfig } from './config.js';
 import { closeDb, countUsers } from './lib/db.js';
 import { DB_FILE } from './lib/paths.js';
-import { servePage } from './lib/pages.js';
+import { serveAsset, servePage } from './lib/pages.js';
 import { loadIndex } from './lib/index.js';
 import { adminRoutes } from './routes/admin.js';
 import {
@@ -47,6 +47,10 @@ app.get('/setting', (c) => c.redirect(`${basePath(c)}/admin/setting`));
 app.get('/setting/', (c) => c.redirect(`${basePath(c)}/admin/setting`));
 app.get('/admin/', (c) => c.redirect(`${basePath(c)}/admin`));
 
+// 后台子页面使用相对路径请求 /admin/theme.*
+app.get('/admin/theme.css', (c) => serveAsset(c, 'theme.css', 'text/css; charset=utf-8'));
+app.get('/admin/theme.js', (c) => serveAsset(c, 'theme.js', 'text/javascript; charset=utf-8'));
+
 // —— 管理后台 ——
 app.route('/admin', adminRoutes);
 
@@ -54,6 +58,10 @@ app.route('/admin', adminRoutes);
 app.get('/', (c) => servePage(c, 'index.html'));
 app.get('/login', (c) => servePage(c, 'login.html'));
 app.get('/register', (c) => servePage(c, 'login.html'));
+
+// 主题资源（/admin/setting 这类页面会用相对路径请求 /admin/theme.*）
+app.get('/theme.css', (c) => serveAsset(c, 'theme.css', 'text/css; charset=utf-8'));
+app.get('/theme.js', (c) => serveAsset(c, 'theme.js', 'text/javascript; charset=utf-8'));
 
 app.notFound((c) =>
     c.json({

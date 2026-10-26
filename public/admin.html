@@ -146,6 +146,8 @@
     .toast.err { border-color: rgba(231,76,60,.5); color: #ff9d92; }
     code { background: rgba(255,255,255,.07); padding: 1px 6px; border-radius: 5px; font-size: .82em; }
 </style>
+<link rel="stylesheet" href="theme.css">
+<script src="theme.js"></script>
 </head>
 <body>
 <div class="wrap">
@@ -153,6 +155,7 @@
         <h1>🖼️ 图床后台 <span>·</span> <a href="/" id="homeLink" class="mini">前台</a> <a href="admin/review" id="reviewLink" class="mini" hidden>审核</a> <a href="admin/setting" id="settingLink" class="mini" hidden>设置</a> <a href="admin/users" id="usersLink" class="mini" hidden>账户</a></h1>
         <div class="account">
             <span class="who" id="whoami">加载中…</span>
+            <button class="theme-toggle" type="button" data-theme-toggle>☀️</button>
             <button class="ghost mini" id="logoutBtn">退出登录</button>
         </div>
     </header>
@@ -191,6 +194,11 @@
 
     <div class="grid" id="grid"></div>
     <div class="pager" id="pager"></div>
+
+    <footer class="site-footer">
+        <span>© <span data-year>2026</span> <span data-footer-site>梦星的小图床</span> · img-api</span>
+        <span>All rights reserved.</span>
+    </footer>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -636,6 +644,9 @@
 
             const settings = await request('/settings');
             document.title = (settings.siteName || '梦星的小图床') + ' · 后台';
+            document.querySelectorAll('[data-footer-site]').forEach((el) => {
+                el.textContent = settings.siteName || '梦星的小图床';
+            });
             await load();
         } catch (error) {
             toast(error.message, true);

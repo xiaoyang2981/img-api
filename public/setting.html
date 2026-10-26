@@ -87,6 +87,8 @@
     .toast.on { opacity: 1; transform: translate(-50%, 0); }
     .toast.err { border-color: rgba(231,76,60,.5); color: #ff9d92; }
 </style>
+<link rel="stylesheet" href="theme.css">
+<script src="theme.js"></script>
 </head>
 <body>
 <div class="wrap">
@@ -96,6 +98,7 @@
             <span class="who" id="whoami">…</span>
             <a href="/admin/users" id="usersLink">账户管理</a>
             <a href="/admin" id="backLink">← 返回图库</a>
+            <button class="theme-toggle" type="button" data-theme-toggle>☀️</button>
             <button class="ghost mini" id="logoutBtn">退出登录</button>
         </div>
     </header>
@@ -174,6 +177,11 @@
         </table>
         <p class="hint">给其他服务用：<code id="randomExample">/random?format=json</code></p>
     </div>
+
+    <footer class="site-footer">
+        <span>© <span data-year>2026</span> <span data-footer-site>梦星的小图床</span> · img-api</span>
+        <span>All rights reserved.</span>
+    </footer>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -230,6 +238,9 @@
         $('activePort').textContent = location.port || '80';
         $('randomExample').textContent = location.origin + BASE + '/random?format=json';
         document.title = (data.siteName || '梦星的小图床') + ' · 设置';
+        document.querySelectorAll('[data-footer-site]').forEach((el) => {
+            el.textContent = data.siteName || '梦星的小图床';
+        });
     };
 
     const load = async () => {

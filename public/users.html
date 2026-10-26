@@ -68,6 +68,8 @@
     .toast.on { opacity: 1; transform: translate(-50%, 0); }
     .toast.err { border-color: rgba(231,76,60,.5); color: #ff9d92; }
 </style>
+<link rel="stylesheet" href="theme.css">
+<script src="theme.js"></script>
 </head>
 <body>
 <div class="wrap">
@@ -77,6 +79,7 @@
             <span class="who" id="whoami">…</span>
             <a href="/admin/setting" id="settingLink">设置</a>
             <a href="/admin" id="backLink">← 返回图库</a>
+            <button class="theme-toggle" type="button" data-theme-toggle>☀️</button>
             <button class="ghost mini" id="logoutBtn">退出登录</button>
         </div>
     </header>
@@ -97,6 +100,11 @@
         <h2>账户列表</h2>
         <div class="users" id="users"></div>
     </div>
+
+    <footer class="site-footer">
+        <span>© <span data-year>2026</span> <span data-footer-site>梦星的小图床</span> · img-api</span>
+        <span>All rights reserved.</span>
+    </footer>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -318,6 +326,16 @@
             currentUser = me.user;
             $('whoami').innerHTML = '<b>' + esc(currentUser.displayName || currentUser.username) + '</b> · ' +
                 esc(labelOf(currentUser.role));
+
+            try {
+                const settings = await request('/settings');
+                document.querySelectorAll('[data-footer-site]').forEach((el) => {
+                    el.textContent = settings.siteName || '梦星的小图床';
+                });
+            } catch {
+                // 页脚名称不是关键
+            }
+
             await load();
         } catch (error) {
             toast(error.message, true);

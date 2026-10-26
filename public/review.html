@@ -77,6 +77,8 @@
     .toast.on { opacity: 1; transform: translate(-50%, 0); }
     .toast.err { border-color: rgba(231,76,60,.5); color: #ff9d92; }
 </style>
+<link rel="stylesheet" href="theme.css">
+<script src="theme.js"></script>
 </head>
 <body>
 <div class="wrap">
@@ -88,6 +90,7 @@
             <a href="/admin" id="adminLink" hidden>后台</a>
             <a href="/admin/setting" id="settingLink" hidden>设置</a>
             <a href="/admin/users" id="usersLink" hidden>账户</a>
+            <button class="theme-toggle" type="button" data-theme-toggle>☀️</button>
             <button class="ghost mini" id="logoutBtn">退出登录</button>
         </div>
     </header>
@@ -100,6 +103,11 @@
 
     <div class="grid" id="grid"></div>
     <div class="pager" id="pager"></div>
+
+    <footer class="site-footer">
+        <span>© <span data-year>2026</span> <span data-footer-site>梦星的小图床</span> · img-api</span>
+        <span>All rights reserved.</span>
+    </footer>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -291,6 +299,9 @@
             try {
                 const settings = await request('/settings');
                 document.title = (settings.siteName || '梦星的小图床') + ' · 审核台';
+                document.querySelectorAll('[data-footer-site]').forEach((el) => {
+                    el.textContent = settings.siteName || '梦星的小图床';
+                });
             } catch {
                 // 标题不是关键
             }

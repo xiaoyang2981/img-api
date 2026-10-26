@@ -275,6 +275,8 @@
         .btn { flex: 1; }
     }
 </style>
+<link rel="stylesheet" href="theme.css">
+<script src="theme.js"></script>
 </head>
 <body>
 <div class="shell">
@@ -286,6 +288,7 @@
             <a href="/register" id="registerLink" class="primary">注册</a>
             <a href="/admin" id="adminLink" hidden>进入后台</a>
             <button type="button" id="logoutBtn" hidden>退出</button>
+            <button type="button" class="theme-toggle" data-theme-toggle>☀️</button>
         </nav>
     </header>
 
@@ -327,6 +330,11 @@
             </div>
         </section>
     </main>
+
+    <footer class="site-footer">
+        <span>© <span data-year>2026</span> <span data-footer-site>梦星的小图床</span> · img-api</span>
+        <span>All rights reserved.</span>
+    </footer>
 </div>
 
 <script>
@@ -353,6 +361,9 @@
         const value = String(name || '').trim() || '梦星的小图床';
         $('siteName').textContent = value;
         document.title = value + ' · 随机图床';
+        document.querySelectorAll('[data-footer-site]').forEach((el) => {
+            el.textContent = value;
+        });
     };
 
     const setPlaceholder = (text) => {
