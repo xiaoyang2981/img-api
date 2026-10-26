@@ -137,9 +137,10 @@
         <h1>⚙️ 图床设置</h1>
         <div class="account">
             <span class="who" id="whoami">…</span>
+            <a href="/" id="homeLink">前台</a>
             <a href="/admin/profile" id="profileLink">个人信息</a>
             <a href="/admin/users" id="usersLink">账户管理</a>
-            <a href="/admin" id="backLink">← 返回图库</a>
+            <a href="/admin" id="backLink">返回后台</a>
             <button class="theme-toggle" type="button" data-theme-toggle>☀️</button>
             <button class="ghost mini" id="logoutBtn">退出登录</button>
         </div>
@@ -344,7 +345,9 @@
     const BASE = location.pathname.replace(/\/admin(\/.*)?$/, '');
     const API = BASE + '/admin/api';
     const $ = (id) => document.getElementById(id);
+    const ROLE_LABELS = { owner: '站长', admin: '管理员', moderator: '审核员', member: '成员' };
 
+    document.getElementById('homeLink').href = BASE + '/';
     document.getElementById('backLink').href = BASE + '/admin';
     document.getElementById('profileLink').href = BASE + '/admin/profile';
     document.getElementById('usersLink').href = BASE + '/admin/users';
@@ -495,7 +498,7 @@
             currentUser = me.user;
             $('whoami').innerHTML = '<b>' + String(currentUser.displayName || currentUser.username)
                 .replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]))
-                + '</b><span class="role">管理员</span>';
+                + '</b> · <span class="role ' + currentUser.role + '">' + (ROLE_LABELS[currentUser.role] || currentUser.role) + '</span>';
             if (!$('testEmail').value && currentUser.email) {
                 $('testEmail').value = currentUser.email;
             }

@@ -114,6 +114,7 @@ SMTP 配置保存在 SQLite 的 `settings` 表；QQ/163 邮箱通常需要使用
 - 点图片或「换一张」会重新请求 `/random?format=json`，每次随机取图
 - 图库为空时显示占位提示；登录后首页按钮会变成「进入后台」
 - `/login` 登录，`/register` 注册（注册功能可在设置里关闭）
+- `/docs` 使用文档：面向访客、成员、API 用户和管理员的完整操作说明
 
 ## 接口
 
@@ -136,6 +137,7 @@ SMTP 配置保存在 SQLite 的 `settings` 表；QQ/163 邮箱通常需要使用
 | `GET /info/{id}` | 单张图片信息 |
 | `GET /stats` | 前台可展示图片的数量、标签与体积统计（不含隐藏图片） |
 | `GET /health` | 健康检查 |
+| `GET /docs` | 前台使用文档（公开页面） |
 
 ### API 速率限制与 Token
 
@@ -388,7 +390,25 @@ location /img/ {
 }
 ```
 
-如果不是 HTTPS 直连，记得让反代传 `X-Forwarded-Proto`，这样会话 Cookie 会带上 `Secure`。
+如果不是 HTTPS 直连，记得让反代传 `X-Forwarded-Proto`，这样会话 Cookie 会带上 `Secure`，复制出来的图片链接也会使用 HTTPS。
+
+### Cloudflare 缓存建议
+
+图片直链已经发送长期缓存和 Cloudflare 可识别的响应头：
+
+- `Cache-Control: public, max-age=31536000, immutable`
+- `CDN-Cache-Control` / `Cloudflare-CDN-Cache-Control`
+- `ETag` 和 `Last-Modified`
+
+在 Cloudflare 中建议配置：
+
+1. 开启代理，SSL/TLS 使用 **Full (strict)**。
+2. 为 `/i/*` 和 `/w/*` 添加 Cache Rule，启用缓存；Edge TTL 可设为 1 年，Browser TTL 选择 Respect origin。
+3. `/random`、`/api/v1`、`/api/v1.png`、`/list`、`/info`、`/stats` 保持不缓存，避免随机图和用户列表被 CDN 缓存。
+4. 启用 Brotli；图片请求优先使用 `/w/...webp` 或 `/api/v1.png`，不要在图片直链后加无意义的随机参数。
+5. 如果使用 Nginx 再转发到 Node，确保传递 `Host`、`X-Forwarded-Proto`，并保留 Cloudflare 的 `CF-Visitor` 请求头。
+
+如果没有 Cloudflare 或反代没有传 `X-Forwarded-Proto`，后台复制出来的图片链接仍会是 Node 看到的 `http://` 地址。
 
 ## 接入其他服务
 

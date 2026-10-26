@@ -24,6 +24,7 @@
     h1 span { color: var(--muted); font-size: .78rem; font-weight: 400; margin-left: 8px; }
     .account { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: .82rem; color: var(--muted); }
     .account .who b { color: var(--ok); }
+    .account .who .role { color: var(--accent); margin-left: 5px; }
     .tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
     .tab {
         font: inherit; font-size: .84rem; color: var(--muted); background: var(--panel);
@@ -88,9 +89,9 @@
             <span class="who" id="whoami">…</span>
             <a href="/" id="homeLink">前台</a>
             <a href="/admin/profile" id="profileLink">个人信息</a>
-            <a href="/admin" id="adminLink" hidden>后台</a>
+            <a href="/admin" id="adminLink" hidden>返回后台</a>
             <a href="/admin/setting" id="settingLink" hidden>设置</a>
-            <a href="/admin/users" id="usersLink" hidden>账户</a>
+            <a href="/admin/users" id="usersLink" hidden>账户管理</a>
             <button class="theme-toggle" type="button" data-theme-toggle>☀️</button>
             <button class="ghost mini" id="logoutBtn">退出登录</button>
         </div>
@@ -293,7 +294,7 @@
 
             const canManage = currentUser.role === 'owner' || currentUser.role === 'admin';
             $('whoami').innerHTML = '<b>' + esc(currentUser.displayName || currentUser.username) + '</b> · ' +
-                (ROLE_LABELS[currentUser.role] || currentUser.role);
+                '<span class="role ' + esc(currentUser.role) + '">' + (ROLE_LABELS[currentUser.role] || currentUser.role) + '</span>';
             $('adminLink').hidden = !canManage;
             $('settingLink').hidden = !canManage;
             $('usersLink').hidden = !canManage;

@@ -43,8 +43,70 @@ export const basePath = (c) => {
     return base.length ? '/' + base.join('/') : '';
 };
 
+// 生成对外地址时优先使用反向代理/Cloudflare 转发的协议和主机，
+// 避免后台复制出来的图片链接变成内部 http:// 地址。
+export const publicOrigin = (c) => {
+    let proto = '';
+
+    // Cloudflare 的 CF-Visitor 更接近访客实际使用的协议。
+    const visitor = c.req.header('cf-visitor');
+    if (visitor) {
+        try {
+            const scheme = String(JSON.parse(visitor).scheme || '').toLowerCase();
+            if (scheme === 'http' || scheme === 'https') proto = scheme;
+        } catch {
+            // 忽略非 JSON 的 cf-visitor
+        }
+    }
+
+    if (!proto) {
+        proto = (c.req.header('x-forwarded-proto') || '').split(',')[0].trim().toLowerCase();
+    }
+
+    if (proto !== 'https' && proto !== 'http') {
+        try {
+            proto = new URL(c.req.url).protocol.replace(':', '').toLowerCase();
+        } catch {
+            proto = 'http';
+        }
+    }
+
+    let host = (c.req.header('x-forwarded-host') || '').split(',')[0].trim()
+        || c.req.header('host')
+        || '';
+
+    if (!host) {
+        try {
+            host = new URL(c.req.url).host;
+        } catch {
+            host = 'localhost';
+        }
+    }
+
+    const forwardedPort = (c.req.header('x-forwarded-port') || '').split(',')[0].trim();
+    if (forwardedPort && !host.includes(':') &&
+        !((proto === 'https' && forwardedPort === '443') || (proto === 'http' && forwardedPort === '80'))) {
+        host += ':' + forwardedPort;
+    }
+
+    return `${proto === 'https' ? 'https' : 'http'}://${host}`;
+};
+
+const noStore = (c) => {
+    c.header('Cache-Control', 'no-store');
+    c.header('CDN-Cache-Control', 'no-store');
+    c.header('Cloudflare-CDN-Cache-Control', 'no-store');
+};
+
+const imageCacheHeaders = (cacheControl) => ({
+    'Cache-Control': cacheControl,
+    'CDN-Cache-Control': cacheControl,
+    'Cloudflare-CDN-Cache-Control': cacheControl,
+    'X-Content-Type-Options': 'nosniff'
+});
+
 export const decorate = (c, image) => {
-    const origin = new URL(c.req.url).origin;
+    const origin = publicOrigin(c);
     const prefix = basePath(c);
     const { ownerId, reviewedBy, reviewedAt, reviewNote, ...rest } = image;
 
@@ -85,15 +147,26 @@ const serve = async (c, dir, name, mime, cacheOverride = null) => {
             return c.text('Not Found', 404);
         }
 
+        const etag = `"${image.hash}"`;
+        const headers = {
+            ...imageCacheHeaders(cacheControl),
+            ETag: etag,
+            'Last-Modified': info.mtime.toUTCString()
+        };
+
+        if (c.req.header('if-none-match') === etag) {
+            return new Response(null, { status: 304, headers });
+        }
+
         // 直接读成 Buffer：图片不大，且避免 Node 里把文件流塞进 Response 时
         // 客户端提前断开导致的 ReadableStream 已关闭错误（会直接崩进程）
         const body = await readFile(filePath);
 
         return new Response(body, {
             headers: {
+                ...headers,
                 'Content-Type': mime,
-                'Content-Length': String(body.length),
-                'Cache-Control': cacheControl
+                'Content-Length': String(body.length)
             }
         });
     } catch {
@@ -131,7 +204,7 @@ const targetFor = (c, image) => {
 };
 
 const randomJson = (c, image, target) => {
-    const origin = new URL(c.req.url).origin;
+    const origin = publicOrigin(c);
     const prefix = basePath(c);
 
     return {
@@ -157,10 +230,11 @@ export const randomHandler = async (c) => {
     const prefix = basePath(c);
 
     if (c.req.query('format') === 'json') {
+        noStore(c);
         return c.json(randomJson(c, image, target));
     }
 
-    c.header('Cache-Control', 'no-store');
+    noStore(c);
     return c.redirect(`${prefix}${target}`, 302);
 };
 
@@ -175,7 +249,7 @@ const apiV1 = async (c, forcePng = false) => {
 
     if (c.req.query('format') === 'json') {
         const { target } = targetFor(c, image);
-        c.header('Cache-Control', 'no-store');
+        noStore(c);
         return c.json(randomJson(c, image, target));
     }
 
@@ -192,6 +266,9 @@ const apiV1 = async (c, forcePng = false) => {
                     'Content-Type': 'image/png',
                     'Content-Length': String(body.length),
                     'Cache-Control': 'no-store',
+                    'CDN-Cache-Control': 'no-store',
+                    'Cloudflare-CDN-Cache-Control': 'no-store',
+                    'X-Content-Type-Options': 'nosniff',
                     'X-Image-Id': image.id
                 }
             });
@@ -252,6 +329,8 @@ export const listHandler = async (c) => {
     const total = pool.length;
     const start = (page - 1) * pageSize;
 
+    noStore(c);
+
     return c.json({
         total,
         page,
@@ -275,12 +354,14 @@ export const infoHandler = (c) => {
         }
     }
 
+    noStore(c);
     return c.json(decorate(c, image));
 };
 
 // GET /stats
 export const statsHandler = (c) => {
     const data = index.publicStats();
+    noStore(c);
     return c.json({
         ...data,
         totalSizeMB: Number((data.totalSize / 1024 / 1024).toFixed(2)),
