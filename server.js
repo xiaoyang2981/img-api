@@ -48,6 +48,8 @@ app.get('/setting', (c) => c.redirect(`${basePath(c)}/admin/setting`));
 app.get('/setting/', (c) => c.redirect(`${basePath(c)}/admin/setting`));
 app.get('/profile', (c) => c.redirect(`${basePath(c)}/admin/profile`));
 app.get('/profile/', (c) => c.redirect(`${basePath(c)}/admin/profile`));
+app.get('/docs', (c) => servePage(c, 'docs.html'));
+app.get('/docs/', (c) => c.redirect(`${basePath(c)}/docs`));
 app.get('/admin/', (c) => c.redirect(`${basePath(c)}/admin`));
 
 // 后台子页面使用相对路径请求 /admin/theme.*

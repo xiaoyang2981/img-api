@@ -157,7 +157,7 @@
     </form>
 
     <p class="switch-line" id="switchLine"></p>
-    <p class="foot"><a href="/" id="homeLink">← 返回首页</a></p>
+    <p class="foot"><a href="/" id="homeLink">← 返回首页</a> · <a href="/docs" id="docsLink">使用文档</a></p>
     <p class="login-copyright">© <span data-year>2026</span> <span data-footer-site>梦星的小图床</span> · img-api · All rights reserved.</p>
 </div>
 
@@ -177,6 +177,7 @@
     let busy = false;
 
     document.getElementById('homeLink').href = BASE + '/';
+    document.getElementById('docsLink').href = BASE + '/docs';
 
     const showError = (message) => {
         const el = $('error');

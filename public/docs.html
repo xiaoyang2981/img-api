@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>使用文档</title>
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+        --bg: #12141a; --panel: rgba(255,255,255,.05); --panel-hover: rgba(255,255,255,.08);
+        --border: rgba(255,255,255,.12); --text: #e8ebf2; --muted: #8b93a7;
+        --accent: #50b7fe; --ok: #2ecc71; --warn: #f0a020; --danger: #e74c3c;
+    }
+    html { scroll-behavior: smooth; }
+    body {
+        background: radial-gradient(1200px 600px at 20% -10%, #1b2740 0%, var(--bg) 55%);
+        color: var(--text); font-family: 'Segoe UI', 'Microsoft YaHei', -apple-system, sans-serif;
+        min-height: 100vh; padding: 24px;
+    }
+    a { color: var(--accent); text-decoration: none; }
+    .doc-shell { width: min(1180px, 100%); margin: 0 auto; }
+    .doc-header {
+        display: flex; justify-content: space-between; align-items: center;
+        gap: 14px; flex-wrap: wrap; margin-bottom: 26px;
+    }
+    .brand { display: flex; align-items: center; gap: 9px; color: var(--text); font-weight: 700; font-size: 1.05rem; }
+    .brand small { color: var(--muted); font-size: .74rem; font-weight: 400; margin-left: 2px; }
+    .doc-nav { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; font-size: .84rem; color: var(--muted); }
+    .doc-nav a { color: var(--muted); padding: 5px 0; }
+    .doc-nav a:hover, .doc-nav a.active { color: var(--text); }
+    .doc-layout { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 28px; align-items: start; }
+    .doc-toc {
+        position: sticky; top: 22px; background: var(--panel); border: 1px solid var(--border);
+        border-radius: 14px; padding: 17px 16px;
+    }
+    .doc-toc strong { display: block; color: var(--muted); font-size: .72rem; letter-spacing: .1em; margin-bottom: 10px; }
+    .doc-toc a {
+        display: block; color: var(--muted); font-size: .82rem; line-height: 1.8;
+        padding: 3px 0; border-left: 2px solid transparent; padding-left: 10px; margin-left: -10px;
+    }
+    .doc-toc a:hover, .doc-toc a.active { color: var(--text); border-left-color: var(--accent); }
+    .doc-content { min-width: 0; }
+    .doc-hero {
+        background:
+            radial-gradient(600px 200px at 100% 0%, rgba(80,183,254,.16), transparent 70%),
+            var(--panel);
+        border: 1px solid var(--border); border-radius: 18px; padding: 30px 30px 27px;
+        margin-bottom: 20px;
+    }
+    .eyebrow { color: var(--accent); font-size: .72rem; letter-spacing: .12em; font-weight: 700; }
+    .doc-hero h1 { font-size: clamp(1.55rem, 3vw, 2rem); margin: 9px 0 10px; }
+    .doc-hero p { color: var(--muted); font-size: .88rem; line-height: 1.9; max-width: 720px; }
+    .hero-actions { display: flex; gap: 9px; flex-wrap: wrap; margin-top: 18px; }
+    .btn {
+        display: inline-flex; justify-content: center; align-items: center; min-height: 36px;
+        padding: 0 14px; border-radius: 9px; font-size: .82rem; border: 1px solid var(--border);
+        background: var(--panel); color: var(--text); cursor: pointer;
+    }
+    .btn.primary { background: linear-gradient(45deg, #50b7fe, #3aa7fe); border-color: transparent; color: #fff; }
+    .btn:hover { filter: brightness(1.06); }
+    .doc-section {
+        background: var(--panel); border: 1px solid var(--border); border-radius: 15px;
+        padding: 22px 24px; margin-bottom: 17px; scroll-margin-top: 24px;
+    }
+    .doc-section h2 { font-size: 1.08rem; margin-bottom: 10px; }
+    .doc-section h3 { font-size: .93rem; margin: 19px 0 7px; }
+    .doc-section h3:first-of-type { margin-top: 12px; }
+    .doc-section p, .doc-section li { color: var(--muted); font-size: .84rem; line-height: 1.9; }
+    .doc-section p { margin-bottom: 9px; }
+    .doc-section ol, .doc-section ul { padding-left: 1.5em; margin: 7px 0 12px; }
+    .doc-section li { margin: 3px 0; }
+    .doc-section strong { color: var(--text); font-weight: 600; }
+    .doc-section code {
+        background: rgba(255,255,255,.07); color: #a9dbff; border-radius: 5px;
+        padding: 1px 5px; font-family: 'Cascadia Code', Consolas, monospace; font-size: .84em;
+        word-break: break-word;
+    }
+    .callout {
+        border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px;
+        margin: 13px 0; color: var(--muted); font-size: .82rem; line-height: 1.8;
+        background: rgba(80,183,254,.06);
+    }
+    .callout.warn { border-color: rgba(240,160,32,.35); background: rgba(240,160,32,.08); }
+    .callout b { color: var(--text); }
+    .doc-steps { counter-reset: step; display: grid; gap: 10px; margin: 13px 0 5px; }
+    .doc-step { position: relative; padding: 13px 14px 13px 44px; border: 1px solid var(--border); border-radius: 11px; }
+    .doc-step::before {
+        counter-increment: step; content: counter(step); position: absolute; left: 13px; top: 13px;
+        width: 22px; height: 22px; border-radius: 50%; background: rgba(80,183,254,.16);
+        color: var(--accent); font-size: .74rem; font-weight: 700; display: grid; place-items: center;
+    }
+    .doc-step b { display: block; color: var(--text); font-size: .86rem; margin-bottom: 3px; }
+    .doc-step span { color: var(--muted); font-size: .82rem; line-height: 1.8; }
+    .table-wrap { overflow-x: auto; margin: 10px 0 15px; }
+    table { width: 100%; border-collapse: collapse; font-size: .8rem; min-width: 540px; }
+    th, td { text-align: left; padding: 9px 8px; border-bottom: 1px solid rgba(255,255,255,.07); vertical-align: top; }
+    th { color: var(--muted); font-weight: 500; }
+    td { color: var(--text); line-height: 1.7; }
+    td.muted { color: var(--muted); }
+    td code { white-space: nowrap; }
+    .code-block { position: relative; margin: 10px 0 15px; background: rgba(0,0,0,.28); border: 1px solid var(--border); border-radius: 10px; }
+    .code-block pre { overflow-x: auto; padding: 14px 14px 13px; }
+    .code-block code {
+        padding: 0; background: none; color: #c7ddff; font-family: 'Cascadia Code', Consolas, monospace;
+        font-size: .78rem; line-height: 1.8; white-space: pre;
+    }
+    .copy-code {
+        position: absolute; top: 8px; right: 8px; border: 1px solid var(--border); border-radius: 7px;
+        background: var(--panel); color: var(--muted); font: inherit; font-size: .7rem;
+        padding: 4px 8px; cursor: pointer;
+    }
+    .copy-code:hover { color: var(--text); background: var(--panel-hover); }
+    .faq-item { border-top: 1px solid rgba(255,255,255,.08); padding: 13px 0; }
+    .faq-item:first-of-type { border-top: none; padding-top: 2px; }
+    .faq-item h3 { font-size: .86rem; margin: 0 0 4px; color: var(--text); }
+    .faq-item p { margin: 0; }
+    .top-link { display: inline-block; margin-top: 8px; font-size: .8rem; }
+    .site-footer { margin-top: 28px; }
+    .toast {
+        position: fixed; left: 50%; bottom: 30px; transform: translate(-50%, 16px);
+        background: #1e2430; border: 1px solid var(--border); color: var(--text);
+        padding: 9px 16px; border-radius: 9px; font-size: .8rem; opacity: 0;
+        pointer-events: none; transition: .2s; z-index: 50;
+    }
+    .toast.on { opacity: 1; transform: translate(-50%, 0); }
+    .toast.err { color: #ff9d92; border-color: rgba(231,76,60,.5); }
+    @media (max-width: 860px) {
+        .doc-layout { grid-template-columns: 1fr; gap: 16px; }
+        .doc-toc {
+            position: static; display: flex; gap: 8px 15px; flex-wrap: wrap;
+            padding: 12px 14px;
+        }
+        .doc-toc strong { width: 100%; margin-bottom: 0; }
+        .doc-toc a { border-left: none; padding-left: 0; margin-left: 0; }
+        .doc-toc a.active { border-left: none; color: var(--text); }
+        .doc-hero { padding: 24px 21px; }
+        .doc-section { padding: 18px 17px; }
+    }
+    @media (max-width: 520px) {
+        body { padding: 14px; }
+        .doc-shell { width: 100%; }
+        .doc-nav { gap: 9px; }
+        .doc-hero h1 { font-size: 1.45rem; }
+        .code-block pre { padding-right: 12px; }
+        .copy-code { position: static; display: block; margin: 8px 8px 0 auto; }
+        .table-wrap { margin-right: -4px; }
+    }
+    html[data-theme="light"] .doc-section,
+    html[data-theme="light"] .doc-toc,
+    html[data-theme="light"] .doc-hero { background: #ffffff; border-color: rgba(16,24,40,.13); }
+    html[data-theme="light"] .doc-hero { box-shadow: 0 12px 34px rgba(30,41,59,.08); }
+    html[data-theme="light"] .doc-section code { color: #0f5f9e; background: rgba(16,24,40,.06); }
+    html[data-theme="light"] .code-block { background: #f8fafc; }
+    html[data-theme="light"] .code-block code { color: #1e3a5f; }
+    html[data-theme="light"] .copy-code { background: #ffffff; color: var(--muted); }
+    html[data-theme="light"] .toast { background: #ffffff; color: var(--text); }
+</style>
+<link rel="stylesheet" href="theme.css">
+<script src="theme.js"></script>
+</head>
+<body>
+<div class="doc-shell">
+    <header class="doc-header">
+        <a class="brand" href="/" id="brandLink">🖼️ <span id="siteName">梦星的小图床</span><small>使用文档</small></a>
+        <nav class="doc-nav">
+            <a href="/" id="homeLink">首页</a>
+            <a href="/docs" class="active">使用文档</a>
+            <a href="/login" id="authLink">登录 / 注册</a>
+            <button class="theme-toggle" type="button" data-theme-toggle>☀️</button>
+        </nav>
+    </header>
+
+    <div class="doc-layout">
+        <aside class="doc-toc">
+            <strong>目录</strong>
+            <a href="#quick">快速开始</a>
+            <a href="#browse">浏览图片</a>
+            <a href="#account">注册与登录</a>
+            <a href="#upload">上传与审核</a>
+            <a href="#profile">个人信息</a>
+            <a href="#api">API 接入</a>
+            <a href="#token">Token 与限流</a>
+            <a href="#admin">管理员指南</a>
+            <a href="#faq">常见问题</a>
+            <a href="#security">安全须知</a>
+        </aside>
+
+        <article class="doc-content">
+            <section class="doc-hero">
+                <div class="eyebrow">USER GUIDE · IMG-API</div>
+                <h1>使用文档</h1>
+                <p>本文档面向所有访问者、注册用户和站点管理员，按实际操作顺序说明图片浏览、账户注册、上传审核、个人信息管理和 API 接入方式。按照对应章节逐步操作即可完成配置。</p>
+                <div class="hero-actions">
+                    <a class="btn primary" href="#quick">开始使用</a>
+                    <a class="btn" href="#api">查看 API 接口</a>
+                </div>
+            </section>
+
+            <section class="doc-section" id="quick">
+                <h2>快速开始</h2>
+                <div class="doc-steps">
+                    <div class="doc-step">
+                        <b>第一步：浏览图片</b>
+                        <span>打开首页，等待随机图片加载完成。点击当前图片或「换一张」即可刷新。</span>
+                    </div>
+                    <div class="doc-step">
+                        <b>第二步：注册或登录</b>
+                        <span>如果需要上传图片、管理自己的图片或调用 API，请先注册账户并登录。</span>
+                    </div>
+                    <div class="doc-step">
+                        <b>第三步：开始使用</b>
+                        <span>普通用户可进入后台完成上传；API 使用者请在「个人信息」页创建 Token，然后参考下方接口章节接入。</span>
+                    </div>
+                </div>
+                <div class="callout"><b>仅浏览图片时无需注册。</b> 游客可以直接查看首页随机图片，也可以通过公开接口获取图片。</div>
+            </section>
+
+            <section class="doc-section" id="browse">
+                <h2>浏览图片</h2>
+                <p>首页会从已通过审核且允许在前台展示的图片中随机选择一张。每次点击图片或「换一张」都会重新请求一次随机图。</p>
+                <ul>
+                    <li>如果首页提示图库为空，说明当前没有通过审核且允许展示的图片。</li>
+                    <li>图片被管理员或上传者隐藏后，不会继续出现在首页、随机接口、公开列表和前台统计中。</li>
+                    <li>右上角主题按钮可以切换深色和浅色模式。</li>
+                    <li>页面底部的站点名称和版权信息由站长在后台设置。</li>
+                </ul>
+                <div class="callout warn"><b>注意：</b> 直接打开已被隐藏或尚未通过审核的图片地址时，匿名访问可能返回 404。图片上传者、审核员、管理员和站长仍可在后台预览。</div>
+            </section>
+
+            <section class="doc-section" id="account">
+                <h2>注册与登录</h2>
+                <h3>注册账户</h3>
+                <ol>
+                    <li>打开首页右上角的「注册」入口，或直接访问 <code>/register</code>。</li>
+                    <li>填写用户名、密码和显示名。用户名长度为 3–32 位，密码至少 8 位。</li>
+                    <li>如果站点开启了邮箱验证，请填写邮箱并点击「发送验证码」。</li>
+                    <li>将收到的 6 位验证码填入输入框，阅读并确认后提交注册。</li>
+                </ol>
+                <p>验证码在 10 分钟内有效，同一邮箱 60 秒内不能重复发送。注册的账户默认身份组为「成员」。</p>
+                <h3>登录与找回密码</h3>
+                <ol>
+                    <li>打开 <code>/login</code>，输入用户名和密码登录。</li>
+                    <li>登录后会根据身份组进入后台、审核台或个人信息页。</li>
+                    <li>忘记密码时，使用登录页的「忘记密码」入口，通过当前绑定邮箱接收验证码并重置密码。</li>
+                </ol>
+                <div class="callout warn"><b>请妥善保管账户信息。</b> 不应将密码、邮箱验证码或 API Token 提供给他人。</div>
+                <h3>身份组说明</h3>
+                <div class="table-wrap">
+                    <table>
+                        <tr><th>身份组</th><th>权限概述</th></tr>
+                        <tr><td><strong>站长</strong></td><td>全部权限，包括站点设置、账户管理、审核、图片管理、端口设置和 Token 封禁管理。</td></tr>
+                        <tr><td><strong>管理员</strong></td><td>审核、图片管理、账户管理和普通设置；不能修改端口等仅站长可改的配置。</td></tr>
+                        <tr><td><strong>审核员</strong></td><td>可访问审核台处理待审核图片，并查看个人信息；不能上传图片。</td></tr>
+                        <tr><td><strong>成员</strong></td><td>登录后可上传图片、管理自己的图片，并查看个人信息。</td></tr>
+                    </table>
+                </div>
+            </section>
+
+            <section class="doc-section" id="upload">
+                <h2>上传与审核</h2>
+                <h3>上传图片</h3>
+                <ol>
+                    <li>使用成员、管理员或站长账户登录，进入后台首页 <code>/admin</code>。</li>
+                    <li>将图片拖入上传区域，或点击上传区域选择文件。支持 PNG、JPG、WebP、GIF 和 AVIF，单张大小不能超过站长设置的上限。</li>
+                    <li>按需填写标签、标题和来源。标签使用英文逗号分隔，例如 <code>wolf,dragon</code>。</li>
+                    <li>选择文件后会先弹出确认窗口。核对文件名、缩略图、标签、标题和来源后，点击「确认上传」。</li>
+                    <li>上传完成后图片状态为「待审核」，此时不会出现在前台图库中。</li>
+                </ol>
+                <h3>审核流程</h3>
+                <ol>
+                    <li>审核员、管理员或站长进入审核台 <code>/admin/review</code>。</li>
+                    <li>在待审核、已通过、已拒绝标签之间切换并查看图片。</li>
+                    <li>点击「通过」后，图片才可能进入前台；点击「拒绝」则不会进入图库。</li>
+                    <li>审核通过后，如果不需要继续在前台展示，可以在后台图片卡片下方点击「隐藏前台」。</li>
+                </ol>
+                <div class="callout"><b>重复图片：</b> 系统会按文件内容去重。相同图片重复上传时可能直接返回已有记录，不会重复占用存储空间。</div>
+                <div class="callout"><b>前台展示开关：</b> 已通过审核的图片可以单独隐藏或恢复展示。隐藏后不会进入首页、<code>/random</code>、<code>/api/v1</code>、<code>/list</code> 和前台统计。</div>
+            </section>
+
+            <section class="doc-section" id="profile">
+                <h2>个人信息与账户安全</h2>
+                <p>登录后访问 <code>/admin/profile</code>，可以管理显示名、邮箱、密码和 API Token。</p>
+                <h3>基本资料</h3>
+                <ul>
+                    <li>可以修改显示名，显示名会出现在前台、后台和账户信息中。</li>
+                    <li>用户名是账户唯一标识，不可修改。</li>
+                </ul>
+                <h3>绑定或修改邮箱</h3>
+                <ul>
+                    <li>首次绑定邮箱时，验证码会发送到新邮箱，用新邮箱完成验证。</li>
+                    <li>修改已经绑定的邮箱时，验证码会发送到当前邮箱，验证通过后才能改成新邮箱。</li>
+                    <li>邮箱修改成功后，其他设备的登录会话会失效。</li>
+                </ul>
+                <h3>修改密码</h3>
+                <ul>
+                    <li>需要填写当前密码，并向当前邮箱发送验证码。</li>
+                    <li>新密码至少 8 位，且需要再次确认。</li>
+                    <li>修改成功后，其他设备会退出登录，当前会话保留。</li>
+                    <li>未绑定邮箱时不能修改密码，请先完成邮箱绑定。</li>
+                </ul>
+                <h3>API Token</h3>
+                <ul>
+                    <li>在「API Token」区域点击「创建 Token」。</li>
+                    <li>Token 只会在创建弹窗中显示一次，请立即复制并妥善保存。</li>
+                    <li>关闭弹窗后无法再次查看完整 Token，只会保留尾号。</li>
+                    <li>如果 Token 遗失或需要更换，请先点击「吊销 Token」，再重新创建。</li>
+                    <li>Token 被临时封禁时不能创建新 Token，但可以吊销；需要等待自动解封或联系管理员解除后才能重新创建。</li>
+                </ul>
+                <div class="callout warn"><b>不要把 Token 当作公开链接参数分享。</b> 在支持请求头的场景中，优先使用 <code>Authorization</code> 请求头；<code>?token=</code> 适合图片标签、HMCL 等无法设置请求头的场景。</div>
+            </section>
+
+            <section class="doc-section" id="api">
+                <h2>API 接入</h2>
+                <p>API 地址以当前站点地址为前缀。以下示例中的 <span data-base-url>http://your-host:2618</span> 请替换为您实际访问的站点地址。</p>
+                <div class="table-wrap">
+                    <table>
+                        <tr><th>接口</th><th>用途</th><th>说明</th></tr>
+                        <tr><td><code>GET /random</code></td><td>随机图 302</td><td>默认跳转到 WebP，支持标签、类型和 JSON 参数。</td></tr>
+                        <tr><td><code>GET /api/v1</code></td><td>直接返回图片字节</td><td>不返回 302，适合不能跟随跳转的客户端。</td></tr>
+                        <tr><td><code>GET /api/v1.png</code></td><td>直接返回 PNG</td><td>兼容只支持 PNG 的客户端。</td></tr>
+                        <tr><td><code>GET /list</code></td><td>分页图片列表</td><td>默认需要登录或携带 Token；站长可设置为公开。</td></tr>
+                        <tr><td><code>GET /info/{id}</code></td><td>单张图片信息</td><td>隐藏图片对匿名访问返回 404。</td></tr>
+                        <tr><td><code>GET /stats</code></td><td>前台统计</td><td>只统计允许前台展示的已通过图片。</td></tr>
+                        <tr><td><code>GET /i/{file}</code></td><td>原图直链</td><td>长期缓存；不做随机限流。</td></tr>
+                        <tr><td><code>GET /w/{file}</code></td><td>WebP 直链</td><td>长期缓存；不做随机限流。</td></tr>
+                        <tr><td><code>GET /health</code></td><td>健康检查</td><td>返回服务状态。</td></tr>
+                    </table>
+                </div>
+
+                <h3>随机图参数</h3>
+                <div class="table-wrap">
+                    <table>
+                        <tr><th>参数</th><th>取值</th><th>说明</th></tr>
+                        <tr><td><code>tag</code></td><td>如 <code>wolf,dragon</code></td><td>按标签筛选；多个标签默认任意匹配。</td></tr>
+                        <tr><td><code>tagMode</code></td><td><code>any</code> / <code>all</code></td><td>默认 <code>any</code>；<code>all</code> 要求同时包含全部标签。</td></tr>
+                        <tr><td><code>type</code></td><td><code>origin</code> / <code>png</code></td><td><code>origin</code> 强制原图；<code>png</code> 适用于 <code>/api/v1</code> 系列；<code>/random</code> 默认按站点设置返回 WebP 或原图。</td></tr>
+                        <tr><td><code>format</code></td><td><code>json</code></td><td>返回图片信息 JSON，而不是直接跳转或返回字节。</td></tr>
+                    </table>
+                </div>
+
+                <h3>基础调用示例</h3>
+                <div class="code-block">
+                    <button type="button" class="copy-code">复制</button>
+                    <pre><code>&lt;img src="<span data-base-url>http://your-host:2618</span>/random?tag=wolf" alt="随机图片"&gt;</code></pre>
+                </div>
+                <div class="code-block">
+                    <button type="button" class="copy-code">复制</button>
+                    <pre><code>curl -H "Authorization: Bearer &lt;TOKEN&gt;" "<span data-base-url>http://your-host:2618</span>/random?format=json"</code></pre>
+                </div>
+                <div class="code-block">
+                    <button type="button" class="copy-code">复制</button>
+                    <pre><code>{
+  "id": "图片 ID",
+  "url": "图片直链",
+  "origin": "原图地址",
+  "webp": "WebP 地址",
+  "width": 1920,
+  "height": 1080,
+  "tags": ["wolf", "dragon"]
+}</code></pre>
+                </div>
+
+                <h3>HMCL 等不支持跳转的客户端</h3>
+                <p>HMCL 等客户端可能不会跟随 HTTP 302 跳转。请直接使用返回图片字节的接口，并优先使用 PNG 后缀：</p>
+                <div class="code-block">
+                    <button type="button" class="copy-code">复制</button>
+                    <pre><code><span data-base-url>http://your-host:2618</span>/api/v1.png?token=&lt;TOKEN&gt;</code></pre>
+                </div>
+                <ul>
+                    <li>如果不带 Token，将按游客速率统计。</li>
+                    <li>HMCL 会缓存网络背景图。更换图片后如果长期不更新，可以在地址后增加一个随机参数，或清理 HMCL 的图片缓存。</li>
+                    <li>如果服务器使用 HTTPS，请确保客户端信任对应证书。</li>
+                </ul>
+                <p><a class="top-link" href="#quick">返回快速开始 ↑</a></p>
+            </section>
+
+            <section class="doc-section" id="token">
+                <h2>API Token 与速率限制</h2>
+                <p>为了防止异常爬取，随机图和列表接口按 1 分钟窗口限流。携带有效 Token 或使用已登录会话可以按注册用户额度统计。</p>
+                <div class="table-wrap">
+                    <table>
+                        <tr><th>身份</th><th>默认额度</th><th>统计方式</th></tr>
+                        <tr><td>游客</td><td>200 次/分钟</td><td>按 IP 地址</td></tr>
+                        <tr><td>注册用户</td><td>2000 次/分钟</td><td>按账户</td></tr>
+                        <tr><td>站长</td><td>2,000,000 次/分钟</td><td>系统固定额度</td></tr>
+                    </table>
+                </div>
+                <h3>Token 携带方式</h3>
+                <div class="code-block">
+                    <button type="button" class="copy-code">复制</button>
+                    <pre><code>Authorization: Bearer &lt;TOKEN&gt;
+X-API-Token: &lt;TOKEN&gt;
+<span data-base-url>http://your-host:2618</span>/random?token=&lt;TOKEN&gt;</code></pre>
+                </div>
+                <ul>
+                    <li>没有携带 Token 时，已登录会话按注册用户统计，否则按游客统计。</li>
+                    <li>Token 无效时返回 <code>401</code>，不会降级为游客。</li>
+                    <li>超过额度时返回 <code>429</code>，响应包含 <code>Retry-After</code> 和速率信息响应头。</li>
+                    <li>同一 Token 在 10 分钟内多次触发限流，会被临时封禁；默认封禁 12 小时。</li>
+                    <li>封禁期间该 Token 的请求返回 <code>403</code>，网页登录会话仍可正常使用。</li>
+                </ul>
+                <div class="callout warn"><b>Token 遗失时：</b> 进入个人信息页，先吊销当前 Token，再点击创建。系统不会保存可再次显示的完整 Token 明文。</div>
+                <p><a class="top-link" href="#profile">查看个人信息与 Token 管理 ↑</a></p>
+            </section>
+
+            <section class="doc-section" id="admin">
+                <h2>管理员指南</h2>
+                <p>以下功能仅对相应身份组开放。管理员操作会影响其他用户和前台展示，请确认对象后再执行。</p>
+                <h3>后台首页 <code>/admin</code></h3>
+                <ul>
+                    <li>上传图片、查看图库、编辑标签/标题/来源、删除图片。</li>
+                    <li>已通过审核的图片卡片下方有「隐藏前台 / 显示前台」按钮。</li>
+                    <li>成员只能管理自己上传的图片；管理员和站长可以管理全部图片。</li>
+                </ul>
+                <h3>审核台 <code>/admin/review</code></h3>
+                <ul>
+                    <li>处理待审核图片，执行通过、拒绝或重新打回待审。</li>
+                    <li>审核结果决定图片能否进入前台图库；前台展示开关是独立设置。</li>
+                </ul>
+                <h3>账户管理 <code>/admin/users</code></h3>
+                <ul>
+                    <li>站长可创建管理员、审核员和成员；管理员只能创建审核员和成员。</li>
+                    <li>可查看账户 Token 尾号、限流触发次数和封禁状态。</li>
+                    <li>可对其他可管理账户执行 Token 封禁、调整封禁时长或解除封禁。</li>
+                    <li>自己的邮箱和密码请在个人信息页修改，账户管理页不提供自助修改。</li>
+                </ul>
+                <h3>图床设置 <code>/admin/setting</code></h3>
+                <ul>
+                    <li>站点名称、公开注册、前台列表、上传大小和 API 速率。</li>
+                    <li>站长额外拥有端口和 SMTP 邮箱配置权限。</li>
+                    <li>Token 临时封禁时长可在此统一调整，默认 12 小时。</li>
+                    <li>SMTP 配置完成后，可以发送测试邮件验证发信是否正常。</li>
+                </ul>
+            </section>
+
+            <section class="doc-section" id="faq">
+                <h2>常见问题</h2>
+                <div class="faq-item"><h3>首页没有图片怎么办？</h3><p>可能是图库为空、所有图片都在待审核，或图片已被隐藏。请等待审核通过，或联系站长检查图库状态。</p></div>
+                <div class="faq-item"><h3>访问 /random 返回 404？</h3><p>表示当前没有符合标签条件的已通过图片，或没有允许前台展示的图片。请减少标签条件后重试。</p></div>
+                <div class="faq-item"><h3>返回 401 是什么原因？</h3><p>通常表示 Token 无效或已过期。请到个人信息页复制当前 Token；如果 Token 已遗失，请吊销后重新创建。</p></div>
+                <div class="faq-item"><h3>返回 403 是为什么？</h3><p>可能是 Token 多次触发限流后被临时封禁。请等待封禁结束，或联系管理员解除。</p></div>
+                <div class="faq-item"><h3>返回 429 怎么办？</h3><p>表示请求过快。请根据响应中的 <code>Retry-After</code> 等待后重试；长期使用建议注册账户并携带 Token。</p></div>
+                <div class="faq-item"><h3>上传后前台看不到图片？</h3><p>上传后需要审核通过，并且图片必须处于「前台展示」状态。请先在后台确认状态，再等待审核员处理。</p></div>
+                <div class="faq-item"><h3>图片直链打不开？</h3><p>图片可能尚未通过审核或被隐藏。上传者、审核员、管理员和站长可在登录状态下预览。</p></div>
+                <div class="faq-item"><h3>收不到邮箱验证码？</h3><p>请检查垃圾邮件目录，确认邮箱地址正确，并等待 60 秒后重试。如果仍然收不到，请联系站长检查 SMTP 配置。</p></div>
+                <div class="faq-item"><h3>忘记密码怎么办？</h3><p>在登录页使用「忘记密码」，通过绑定邮箱接收验证码重置。未绑定邮箱的账户需要联系管理员处理。</p></div>
+                <div class="faq-item"><h3>为什么不能修改密码？</h3><p>修改密码需要当前邮箱验证码。请先在个人信息页绑定邮箱；如果仍然不可用，请联系站长检查邮件服务。</p></div>
+                <div class="faq-item"><h3>HMCL 背景图不更新？</h3><p>请使用 <code>/api/v1.png</code> 或 <code>/api/v1?type=png</code>，并清理 HMCL 的网络图片缓存。也可以更换 URL 参数后重新添加。</p></div>
+                <div class="faq-item"><h3>如何切换深色/浅色？</h3><p>点击页面右上角的主题按钮即可切换，选择会保存在浏览器中。</p></div>
+            </section>
+
+            <section class="doc-section" id="security">
+                <h2>安全须知</h2>
+                <ul>
+                    <li>请使用 HTTPS 访问站点，避免密码、Token 和验证码在不安全网络中传输。</li>
+                    <li>API Token 等同于账户访问凭证，不要公开发布、截图或提交到代码仓库。</li>
+                    <li>不要在不可信页面填写邮箱验证码；验证码只用于当前操作。</li>
+                    <li>发现异常请求、Token 泄漏或账户异常时，请及时吊销 Token、修改密码并联系站长。</li>
+                    <li>请遵守站点使用规则和当地法律法规，不要利用接口进行高频爬取、攻击或侵权传播。</li>
+                    <li>管理员在执行封禁、隐藏、删除等操作前，应确认目标账户或图片，避免误操作。</li>
+                </ul>
+                <p>如需进一步协助，请联系站点站长或管理员。联系前请准备好账户名、发生时间和相关请求地址，以便快速定位问题。</p>
+                <p><a class="top-link" href="#quick">返回顶部 ↑</a></p>
+            </section>
+        </article>
+    </div>
+
+    <footer class="site-footer">
+        <span>© <span data-year>2026</span> <span data-footer-site>梦星的小图床</span> · img-api</span>
+        <span>使用文档 · All rights reserved.</span>
+    </footer>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+    const pathname = location.pathname.replace(/\/+$/, '') || '/';
+    const BASE = pathname.replace(/\/docs$/, '');
+    const API = BASE + '/admin/api';
+    const $ = (id) => document.getElementById(id);
+    const baseUrl = location.origin + BASE;
+
+    document.getElementById('brandLink').href = BASE + '/';
+    document.getElementById('homeLink').href = BASE + '/';
+
+    document.querySelectorAll('[data-base-url]').forEach((el) => {
+        el.textContent = baseUrl;
+    });
+
+    let toastTimer = null;
+    const toast = (message, isError = false) => {
+        const el = $('toast');
+        el.textContent = message;
+        el.className = 'toast on' + (isError ? ' err' : '');
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => { el.className = 'toast'; }, 2200);
+    };
+
+    const copyText = async (text) => {
+        if (navigator.clipboard?.writeText) {
+            try {
+                await navigator.clipboard.writeText(text);
+                return;
+            } catch {
+                // HTTP 页面回退到 execCommand
+            }
+        }
+
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.setAttribute('readonly', '');
+        textarea.style.position = 'fixed';
+        textarea.style.top = '-1000px';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        const ok = document.execCommand('copy');
+        textarea.remove();
+        if (!ok) throw new Error('copy failed');
+    };
+
+    document.querySelectorAll('.copy-code').forEach((button) => {
+        button.onclick = async () => {
+            const pre = button.closest('.code-block')?.querySelector('pre');
+            if (!pre) return;
+            try {
+                await copyText(pre.innerText);
+                toast('已复制');
+            } catch {
+                toast('复制失败，请手动选择内容', true);
+            }
+        };
+    });
+
+    const sections = [...document.querySelectorAll('.doc-section')];
+    const tocLinks = [...document.querySelectorAll('.doc-toc a')];
+    if ('IntersectionObserver' in window) {
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach((entry) => {
+                if (!entry.isIntersecting) return;
+                tocLinks.forEach((link) => {
+                    link.classList.toggle('active', link.getAttribute('href') === '#' + entry.target.id);
+                });
+            });
+        }, { rootMargin: '-15% 0px -70% 0px', threshold: 0 });
+        sections.forEach((section) => observer.observe(section));
+    }
+
+    fetch(API + '/auth/status', { cache: 'no-store', credentials: 'same-origin' })
+        .then((response) => response.ok ? response.json() : null)
+        .then((data) => {
+            if (!data) return;
+            const siteName = data.siteName || '梦星的小图床';
+            $('siteName').textContent = siteName;
+            document.title = siteName + ' · 使用文档';
+            document.querySelectorAll('[data-footer-site]').forEach((el) => {
+                el.textContent = siteName;
+            });
+
+            if (data.authenticated && data.user) {
+                const admin = data.user.role === 'moderator' ? '/admin/review' : '/admin';
+                $('authLink').textContent = data.user.role === 'moderator' ? '进入审核台' : '进入后台';
+                $('authLink').href = BASE + admin;
+            } else {
+                $('authLink').textContent = '登录 / 注册';
+                $('authLink').href = BASE + '/login';
+            }
+        })
+        .catch(() => {
+            // 站点信息加载失败时保留静态默认值
+        });
+</script>
+</body>
+</html>
