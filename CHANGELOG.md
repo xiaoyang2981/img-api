@@ -18,6 +18,7 @@
 - 图片直链增加 `CDN-Cache-Control`、`Cloudflare-CDN-Cache-Control`、`ETag` 和 `Last-Modified`，并补充 Cloudflare 缓存配置建议
 - 后台复制按钮优先显示「WebP（推荐）」，减少误用大体积原图
 - 添加 GitHub Actions 自动同步工作流，可从 Gitee 定时镜像所有分支和 tag
+- Gitee 仓库公开后，GitHub Actions 默认无需 Gitee Token
 
 ## 0.2.6
 

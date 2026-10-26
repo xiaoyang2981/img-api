@@ -420,9 +420,10 @@ location /img/ {
 - Gitee 是唯一源仓库，GitHub 上的独立提交可能被覆盖
 - Git tag 会同步，但 GitHub Release 不会自动创建
 
-需要在 GitHub 仓库的 `Settings → Secrets and variables → Actions` 中配置：
+Gitee 仓库已公开，因此不需要 `GITEE_TOKEN`。工作流默认使用 GitHub Actions 自带的 `GITHUB_TOKEN` 推送。
 
-- `GITEE_TOKEN`：Gitee 私人令牌，具备读取私有仓库权限
+如需同步 workflow 文件本身的改动，可以在 GitHub 的 `Settings → Secrets and variables → Actions` 中额外配置：
+
 - `GH_SYNC_TOKEN`：GitHub PAT，具备 Contents 和 Workflows 读写权限
 
 GitHub 仓库地址：`https://github.com/xiaoyang2981/img-api`
