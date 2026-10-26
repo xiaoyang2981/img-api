@@ -356,8 +356,8 @@
                     '</div>' +
                     (tags ? '<div class="tags">#' + esc(tags) + '</div>' : '') +
                     '<div class="actions">' +
+                        (image.webpUrl ? '<button class="mini ghost" data-copy="' + esc(image.webpUrl) + '">WebP（推荐）</button>' : '') +
                         '<button class="mini ghost" data-copy="' + esc(image.url) + '">原图</button>' +
-                        (image.webpUrl ? '<button class="mini ghost" data-copy="' + esc(image.webpUrl) + '">WebP</button>' : '') +
                         visibility +
                         actions +
                     '</div>' +

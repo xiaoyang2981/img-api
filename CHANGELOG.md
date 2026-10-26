@@ -16,6 +16,7 @@
 - API 调用示例统一使用本机地址 `http://127.0.0.1:2618` 作为占位，不展示公网地址
 - 图片和接口地址生成支持 `CF-Visitor`、`X-Forwarded-Proto`、`X-Forwarded-Host`，后台复制的链接会自动使用 HTTPS
 - 图片直链增加 `CDN-Cache-Control`、`Cloudflare-CDN-Cache-Control`、`ETag` 和 `Last-Modified`，并补充 Cloudflare 缓存配置建议
+- 后台复制按钮优先显示「WebP（推荐）」，减少误用大体积原图
 
 ## 0.2.6
 
