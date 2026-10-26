@@ -390,7 +390,25 @@ location /img/ {
 }
 ```
 
-如果不是 HTTPS 直连，记得让反代传 `X-Forwarded-Proto`，这样会话 Cookie 会带上 `Secure`。
+如果不是 HTTPS 直连，记得让反代传 `X-Forwarded-Proto`，这样会话 Cookie 会带上 `Secure`，复制出来的图片链接也会使用 HTTPS。
+
+### Cloudflare 缓存建议
+
+图片直链已经发送长期缓存和 Cloudflare 可识别的响应头：
+
+- `Cache-Control: public, max-age=31536000, immutable`
+- `CDN-Cache-Control` / `Cloudflare-CDN-Cache-Control`
+- `ETag` 和 `Last-Modified`
+
+在 Cloudflare 中建议配置：
+
+1. 开启代理，SSL/TLS 使用 **Full (strict)**。
+2. 为 `/i/*` 和 `/w/*` 添加 Cache Rule，启用缓存；Edge TTL 可设为 1 年，Browser TTL 选择 Respect origin。
+3. `/random`、`/api/v1`、`/api/v1.png`、`/list`、`/info`、`/stats` 保持不缓存，避免随机图和用户列表被 CDN 缓存。
+4. 启用 Brotli；图片请求优先使用 `/w/...webp` 或 `/api/v1.png`，不要在图片直链后加无意义的随机参数。
+5. 如果使用 Nginx 再转发到 Node，确保传递 `Host`、`X-Forwarded-Proto`，并保留 Cloudflare 的 `CF-Visitor` 请求头。
+
+如果没有 Cloudflare 或反代没有传 `X-Forwarded-Proto`，后台复制出来的图片链接仍会是 Node 看到的 `http://` 地址。
 
 ## 接入其他服务
 

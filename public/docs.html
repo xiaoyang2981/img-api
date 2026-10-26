@@ -434,6 +434,7 @@ http://127.0.0.1:2618/random?token=&lt;TOKEN&gt;</code></pre>
                 <div class="faq-item"><h3>忘记密码怎么办？</h3><p>在登录页使用「忘记密码」，通过绑定邮箱接收验证码重置。未绑定邮箱的账户需要联系管理员处理。</p></div>
                 <div class="faq-item"><h3>为什么不能修改密码？</h3><p>修改密码需要当前邮箱验证码。请先在个人信息页绑定邮箱；如果仍然不可用，请联系站长检查邮件服务。</p></div>
                 <div class="faq-item"><h3>HMCL 背景图不更新？</h3><p>请使用 <code>/api/v1.png</code> 或 <code>/api/v1?type=png</code>，并清理 HMCL 的网络图片缓存。也可以更换 URL 参数后重新添加。</p></div>
+                <div class="faq-item"><h3>通过 Cloudflare 访问时图片加载慢？</h3><p>优先使用 WebP 直链或 <code>/api/v1.png</code>；图片直链已经带长期缓存响应头。如果仍然较慢，请让站长确认 Cloudflare 的 <code>/i/*</code> 和 <code>/w/*</code> 缓存规则已开启，并避免在图片地址后附加随机参数。</p></div>
                 <div class="faq-item"><h3>如何切换深色/浅色？</h3><p>点击页面右上角的主题按钮即可切换，选择会保存在浏览器中。</p></div>
             </section>
 

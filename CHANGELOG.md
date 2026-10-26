@@ -14,6 +14,8 @@
 - 首页、登录页和文档页均增加使用文档入口；首页文档按钮放置在账户设置按钮旁
 - API 文档补充标签、格式、分页、搜索、Token 和缓存参数说明
 - API 调用示例统一使用本机地址 `http://127.0.0.1:2618` 作为占位，不展示公网地址
+- 图片和接口地址生成支持 `CF-Visitor`、`X-Forwarded-Proto`、`X-Forwarded-Host`，后台复制的链接会自动使用 HTTPS
+- 图片直链增加 `CDN-Cache-Control`、`Cloudflare-CDN-Cache-Control`、`ETag` 和 `Last-Modified`，并补充 Cloudflare 缓存配置建议
 
 ## 0.2.6
 
