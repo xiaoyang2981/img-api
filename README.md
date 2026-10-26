@@ -9,8 +9,8 @@
 ## 启动
 
 ```bash
-npm install
-npm start
+npm install    # 只用于安装依赖
+node server.js # 启动服务
 ```
 
 首次启动会自动生成管理令牌并打印在控制台：
@@ -26,7 +26,13 @@ npm start
 改端口有两种方式，环境变量优先：
 
 ```bash
-PORT=3000 npm start
+# Linux / macOS
+PORT=3000 node server.js
+```
+
+```powershell
+# Windows PowerShell
+$env:PORT=3000; node server.js
 ```
 
 或者在 `/admin/setting` 页面里改（重启生效）。
