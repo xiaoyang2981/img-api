@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>梦星的小图床 · 登录</title>
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    [hidden] { display: none !important; }
+    :root {
+        --bg: #12141a;
+        --panel: rgba(255, 255, 255, 0.05);
+        --border: rgba(255, 255, 255, 0.12);
+        --text: #e8ebf2;
+        --muted: #8b93a7;
+        --accent: #50b7fe;
+        --danger: #e74c3c;
+    }
+    body {
+        background: radial-gradient(1200px 600px at 20% -10%, #1b2740 0%, var(--bg) 55%);
+        color: var(--text);
+        font-family: 'Segoe UI', 'Microsoft YaHei', -apple-system, sans-serif;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+    }
+    .card {
+        width: min(420px, 100%);
+        background: rgba(23, 26, 34, 0.92);
+        border: 1px solid var(--border);
+        border-radius: 18px;
+        padding: 30px;
+        box-shadow: 0 26px 70px rgba(0, 0, 0, 0.45);
+    }
+    .logo { font-size: 2rem; margin-bottom: 10px; }
+    h1 { font-size: 1.25rem; margin-bottom: 6px; }
+    .sub { color: var(--muted); font-size: .84rem; line-height: 1.7; margin-bottom: 22px; }
+    .field { display: flex; flex-direction: column; gap: 7px; margin-bottom: 14px; }
+    label { font-size: .8rem; color: var(--muted); }
+    input {
+        width: 100%;
+        background: rgba(0, 0, 0, .28);
+        color: var(--text);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 11px 13px;
+        font-size: .92rem;
+        outline: none;
+        font-family: inherit;
+    }
+    input:focus { border-color: var(--accent); }
+    button {
+        width: 100%;
+        background: linear-gradient(45deg, #50b7fe, #3aa7fe);
+        color: #fff;
+        border: none;
+        border-radius: 10px;
+        padding: 11px 16px;
+        font-size: .92rem;
+        font-weight: 600;
+        cursor: pointer;
+        font-family: inherit;
+        margin-top: 4px;
+    }
+    button:hover { filter: brightness(1.08); }
+    button:disabled { opacity: .55; cursor: not-allowed; }
+    .error {
+        display: none;
+        background: rgba(231, 76, 60, .13);
+        border: 1px solid rgba(231, 76, 60, .35);
+        color: #ff9b90;
+        border-radius: 9px;
+        padding: 9px 12px;
+        font-size: .82rem;
+        line-height: 1.6;
+        margin-bottom: 14px;
+    }
+    .error.on { display: block; }
+    .notice {
+        display: none;
+        background: rgba(80, 183, 254, .1);
+        border: 1px solid rgba(80, 183, 254, .32);
+        color: #a9dbff;
+        border-radius: 9px;
+        padding: 10px 12px;
+        font-size: .82rem;
+        line-height: 1.7;
+        margin-bottom: 14px;
+    }
+    .notice.on { display: block; }
+    .notice a { color: var(--accent); }
+    .switch-line {
+        color: var(--muted);
+        font-size: .8rem;
+        text-align: center;
+        margin-top: 16px;
+        min-height: 1.2em;
+    }
+    .switch-line a { color: var(--accent); text-decoration: none; }
+    .foot { margin-top: 10px; color: var(--muted); font-size: .76rem; line-height: 1.7; text-align: center; }
+    .foot a { color: var(--accent); text-decoration: none; }
+    .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<div class="card">
+    <div class="logo">🖼️</div>
+    <h1 id="title">登录图床</h1>
+    <p class="sub" id="subtitle">使用你的账户登录。</p>
+
+    <div class="error" id="error"></div>
+    <div class="notice" id="notice"></div>
+
+    <form id="form" autocomplete="on">
+        <div class="field">
+            <label for="username">用户名</label>
+            <input id="username" name="username" type="text" autocomplete="username" required>
+        </div>
+        <div class="field hidden" id="displayNameField">
+            <label for="displayName">显示名（可选）</label>
+            <input id="displayName" name="displayName" type="text" autocomplete="nickname">
+        </div>
+        <div class="field">
+            <label for="password">密码</label>
+            <input id="password" name="password" type="password" autocomplete="current-password" required>
+        </div>
+        <div class="field hidden" id="confirmField">
+            <label for="confirm">确认密码</label>
+            <input id="confirm" name="confirm" type="password" autocomplete="new-password">
+        </div>
+        <button id="submitBtn" type="submit">登录</button>
+    </form>
+
+    <p class="switch-line" id="switchLine"></p>
+    <p class="foot"><a href="/" id="homeLink">← 返回首页</a></p>
+</div>
+
+<script>
+    const path = location.pathname.replace(/\/+$/, '') || '/';
+    const BASE = path.replace(/\/(?:admin(?:\/login)?|login|register)$/, '');
+    const API = BASE + '/admin/api';
+    const isRegisterPath = /\/register$/.test(path);
+    const isAdminPath = /\/admin(\/login)?$/.test(path);
+
+    const $ = (id) => document.getElementById(id);
+    let mode = 'login';
+    let allowRegistration = true;
+    let siteName = '梦星的小图床';
+    let busy = false;
+
+    document.getElementById('homeLink').href = BASE + '/';
+
+    const showError = (message) => {
+        const el = $('error');
+        el.textContent = message || '';
+        el.classList.toggle('on', Boolean(message));
+    };
+
+    const showNotice = (html) => {
+        const el = $('notice');
+        el.innerHTML = html || '';
+        el.classList.toggle('on', Boolean(html));
+    };
+
+    const request = async (apiPath, options = {}) => {
+        const headers = Object.assign({}, options.headers || {});
+        if (options.json !== undefined) {
+            headers['Content-Type'] = 'application/json';
+            options.body = JSON.stringify(options.json);
+        }
+
+        const response = await fetch(API + apiPath, {
+            ...options,
+            headers,
+            credentials: 'same-origin'
+        });
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+            throw new Error(data.message || ('请求失败 ' + response.status));
+        }
+
+        return data;
+    };
+
+    const setSwitch = (html) => {
+        $('switchLine').innerHTML = html || '';
+    };
+
+    const applyMode = (nextMode) => {
+        mode = nextMode;
+
+        const isSetup = mode === 'setup';
+        const isRegister = mode === 'register';
+        const needsConfirm = isSetup || isRegister;
+
+        $('title').textContent = isSetup ? '初始化站长' : (isRegister ? '注册账户' : '登录图床');
+        $('subtitle').textContent = isSetup
+            ? '第一次使用，先创建站长账户。'
+            : (isRegister
+                ? '注册后即可上传图片、管理自己的作品。'
+                : '使用你的账户登录，管理图床和图片。');
+        document.title = siteName + ' · ' + (isSetup ? '初始化' : (isRegister ? '注册' : '登录'));
+
+        $('displayNameField').classList.toggle('hidden', !isRegister);
+        $('confirmField').classList.toggle('hidden', !needsConfirm);
+        $('confirm').required = needsConfirm;
+        $('password').autocomplete = needsConfirm ? 'new-password' : 'current-password';
+        $('submitBtn').textContent = isSetup ? '创建站长并进入' : (isRegister ? '注册并登录' : '登录');
+
+        $('form').hidden = false;
+
+        if (isRegister) {
+            setSwitch(allowRegistration
+                ? '已有账户？<a href="' + BASE + '/login">去登录</a>'
+                : '');
+        } else if (!isSetup) {
+            setSwitch(allowRegistration
+                ? '还没有账户？<a href="' + BASE + '/register">注册一个</a>'
+                : '注册暂未开放，请联系站长或管理员创建账户');
+        } else {
+            setSwitch('');
+        }
+    };
+
+    const applyUnavailable = (title, message, linkHtml) => {
+        $('title').textContent = title;
+        $('subtitle').textContent = message;
+        document.title = siteName + ' · ' + title;
+        $('form').hidden = true;
+        setSwitch(linkHtml || '');
+    };
+
+    const redirectTarget = () => {
+        const next = new URLSearchParams(location.search).get('next');
+        if (next && next.startsWith('/') && !next.startsWith('//')) return next;
+        return BASE + '/admin';
+    };
+
+    $('form').addEventListener('submit', async (event) => {
+        event.preventDefault();
+        if (busy) return;
+
+        showError('');
+        const username = $('username').value.trim();
+        const password = $('password').value;
+        const displayName = $('displayName').value.trim();
+
+        if (!username || !password) {
+            showError('请填写用户名和密码');
+            return;
+        }
+        if ((mode === 'setup' || mode === 'register') && password !== $('confirm').value) {
+            showError('两次输入的密码不一致');
+            return;
+        }
+        if ((mode === 'setup' || mode === 'register') && password.length < 8) {
+            showError('密码至少 8 位');
+            return;
+        }
+
+        const payload = { username, password };
+        if (mode === 'register') payload.displayName = displayName;
+
+        const endpoint = mode === 'setup'
+            ? '/auth/setup'
+            : (mode === 'register' ? '/auth/register' : '/auth/login');
+
+        busy = true;
+        $('submitBtn').disabled = true;
+
+        try {
+            const result = await request(endpoint, { method: 'POST', json: payload });
+            const next = new URLSearchParams(location.search).get('next');
+
+            if (result.user?.role === 'moderator' && !next) {
+                location.href = BASE + '/admin/review';
+            } else {
+                location.href = redirectTarget();
+            }
+        } catch (error) {
+            showError(error.message);
+            busy = false;
+            $('submitBtn').disabled = false;
+        }
+    });
+
+    const boot = async () => {
+        try {
+            const status = await request('/auth/status');
+            allowRegistration = status.allowRegistration !== false;
+            siteName = status.siteName || siteName;
+
+            if (status.authenticated) {
+                location.href = BASE + '/admin';
+                return;
+            }
+
+            if (status.setup) {
+                if (isRegisterPath) {
+                    applyUnavailable(
+                        '系统尚未初始化',
+                        '还没有站长账户，请先到后台创建站长。',
+                        '<a href="' + BASE + '/admin">前往初始化</a>'
+                    );
+                    return;
+                }
+                applyMode('setup');
+                return;
+            }
+
+            if (isRegisterPath) {
+                if (!allowRegistration) {
+                    applyUnavailable(
+                        '注册暂未开放',
+                        '站长或管理员关闭了公开注册，请联系站长或管理员创建账户。',
+                        '<a href="' + BASE + '/login">去登录</a>'
+                    );
+                    return;
+                }
+                applyMode('register');
+                return;
+            }
+
+            applyMode('login');
+        } catch (error) {
+            showError(error.message);
+            applyMode('login');
+        }
+
+        $('username').focus();
+    };
+
+    boot();
+</script>
+</body>
+</html>
