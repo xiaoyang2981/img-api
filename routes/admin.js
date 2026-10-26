@@ -93,6 +93,7 @@ const imagePayload = (c, image, user) => ({
     owner: image.ownerId ? (db.getUserById(image.ownerId)?.username || null) : null,
     reviewer: image.reviewedBy ? (db.getUserById(image.reviewedBy)?.username || null) : null,
     status: image.status,
+    visible: image.visible !== false,
     reviewedAt: image.reviewedAt || null,
     reviewNote: image.reviewNote || '',
     canEdit: canEditImage(user, image)
@@ -874,6 +875,11 @@ adminRoutes.patch('/api/images/:id', requireRoles('owner', 'admin', 'member'), a
     }
 
     const body = await readJson(c);
+
+    if (body.visible !== undefined && typeof body.visible !== 'boolean') {
+        return c.json({ error: true, message: '前台展示状态格式不正确' }, 400);
+    }
+
     const image = await index.updateImage(id, body);
     return c.json(imagePayload(c, image, user));
 });

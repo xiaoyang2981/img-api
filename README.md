@@ -79,6 +79,16 @@ $env:PORT=3000; node server.js
 
 后台选择或拖入图片后不会立即上传，会先弹出确认框，显示待上传缩略图、标签、标题和来源；点「确认上传」后才真正开始上传。
 
+### 前台展示开关
+
+每张已通过审核的图片在后台卡片下方有「隐藏前台 / 显示前台」按钮：
+
+- 隐藏后不会出现在前台首页、`/random`、`/api/v1`、`/list`、`/stats`
+- 隐藏图片的直链和 `/info` 对匿名访客返回 404；上传者、审核员、管理员和站长仍可预览
+- 前台图片数量、标签和体积统计会自动排除隐藏图片
+- 新图片默认在前台展示；审核状态变化不会自动改变这个开关
+- 上传者可以控制自己的图片，管理员/站长可以控制所有图片
+
 ### 邮箱验证
 
 站长可以在 `/admin/setting` 的「邮箱验证」面板开启此功能，并配置 SMTP：
@@ -124,7 +134,7 @@ SMTP 配置保存在 SQLite 的 `settings` 表；QQ/163 邮箱通常需要使用
 | `GET /w/{file}` | WebP 版本 |
 | `GET /list?page=1&pageSize=40&q=&tag=&tagMode=` | 分页列表（默认需要登录或 API Token） |
 | `GET /info/{id}` | 单张图片信息 |
-| `GET /stats` | 数量与体积统计 |
+| `GET /stats` | 前台可展示图片的数量、标签与体积统计（不含隐藏图片） |
 | `GET /health` | 健康检查 |
 
 ### API 速率限制与 Token
@@ -191,7 +201,7 @@ SMTP 配置保存在 SQLite 的 `settings` 表；QQ/163 邮箱通常需要使用
 |---|---|
 | `POST /admin/api/upload` | multipart，字段 `file`（可重复）、`tags`、`title`、`source`；上传后为待审核 |
 | `GET /admin/api/images` | 后台列表，支持 `status=pending/approved/rejected`；成员只能看自己的图 |
-| `PATCH /admin/api/images/{id}` | 改标签 / 标题 / 来源（本人、管理员或站长） |
+| `PATCH /admin/api/images/{id}` | 改标签 / 标题 / 来源 / `visible` 前台展示状态（本人、管理员或站长） |
 | `DELETE /admin/api/images/{id}` | 删除原图 + webp（本人、管理员或站长） |
 | `POST /admin/api/scan` | 扫描 `data/images/`（站长/管理员），新增图片为待审核 |
 | `GET/PUT /admin/api/settings` | 读取设置 / 保存设置（站长/管理员；端口仅站长） |
