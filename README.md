@@ -61,7 +61,8 @@ $env:PORT=3000; node server.js
 - 首次绑定邮箱：验证码发送到新邮箱，验证后完成绑定
 - 修改已绑定邮箱：验证码发送到当前邮箱，确认后才能改成新邮箱
 - 修改密码：需要当前密码 + 当前邮箱验证码；成功后其他设备的登录会失效
-- 查看、复制账户的 API Token
+- 创建 API Token；创建或吊销重新生成时只在弹窗中显示一次
+- 查看 Token 尾号、创建时间、限流触发次数和封禁状态
 - 未绑定邮箱时不能修改密码，需要先绑定邮箱
 - 邮箱或密码修改需要 SMTP 已配置；未配置时页面会提示并暂时禁用相关操作
 - 站长/管理员在 `/admin/users` 为其他账户重置密码或设置邮箱；自己的邮箱和密码必须在个人信息页修改
@@ -135,7 +136,8 @@ SMTP 配置保存在 SQLite 的 `settings` 表；QQ/163 邮箱通常需要使用
 | 注册用户 | 2000 次/分钟 | 按账户 |
 | 站长 | 2,000,000 次/分钟 | 按账户，固定额度 |
 
-- 每个账户在「个人信息」页有一个稳定、随机、非顺序的 **API Token**
+- 每个账户在「个人信息」页可以创建或吊销自己的 **API Token**
+- Token 是随机、非顺序的哈希值，**只在创建或重新生成时显示一次**；关闭弹窗后只保留尾号
 - 支持三种携带方式：
   ```text
   Authorization: Bearer img_xxxxxxxx
@@ -148,6 +150,15 @@ SMTP 配置保存在 SQLite 的 `settings` 表；QQ/163 邮箱通常需要使用
 - 游客和注册用户额度可在 `/admin/setting` 修改；站长固定额度不在设置页显示
 - 限流计数在内存中，服务重启后清零
 - `/i/{file}`、`/w/{file}` 是长期缓存的图片直链，不打限流，避免破坏外链；限流针对随机取图和列表接口
+
+### Token 临时封禁
+
+- 同一个 Token 在 10 分钟内 **5 次**触碰速率限制后，会自动临时封禁
+- 封禁时长默认 12 小时，可在 `/admin/setting` 修改；管理员也可以在账户页针对单个账户手动设置
+- 封禁期间该账户的 Token 请求返回 `403`，但网页登录会话仍可正常使用
+- 账户页会显示每个账户的 Token 尾号、限流触发次数和封禁截止时间
+- 管理员/站长可以对可管理账户执行「封禁」「调整封禁」「解除封禁」；解除封禁会清零触发次数
+- 封禁状态保存在 SQLite，重启服务不会丢失
 
 登录接口（`/admin/api` 下）：
 
@@ -168,6 +179,8 @@ SMTP 配置保存在 SQLite 的 `settings` 表；QQ/163 邮箱通常需要使用
 | `PUT /admin/api/profile/email` | 修改/绑定邮箱，body：`{ "newEmail": "...", "code": "123456" }` |
 | `POST /admin/api/profile/password-code` | 发送密码修改验证码，body：`{ "currentPassword": "..." }` |
 | `PUT /admin/api/profile/password` | 修改密码，body：`{ "currentPassword": "...", "newPassword": "...", "code": "123456" }` |
+| `POST /admin/api/profile/token` | 创建 API Token；Token 只在本次响应中返回 |
+| `POST /admin/api/profile/token/revoke` | 吊销旧 Token 并生成新 Token；新 Token 只在本次响应中返回 |
 | `POST /admin/api/auth/password` | 兼容接口；现在同样需要 `currentPassword` + `newPassword` + 邮箱验证码 `code` |
 
 图片和设置接口（需要登录，写操作按权限校验）：
@@ -196,7 +209,7 @@ SMTP 配置保存在 SQLite 的 `settings` 表；QQ/163 邮箱通常需要使用
 |---|---|
 | `GET /admin/api/users` | 账户列表（含图片数量、可分配身份组） |
 | `POST /admin/api/users` | 创建账户：`username`、`password`、`role`、`displayName` |
-| `PATCH /admin/api/users/{id}` | 改角色 / 显示名 / 邮箱 / 禁用 / 重置密码；不能修改自己的邮箱或密码 |
+| `PATCH /admin/api/users/{id}` | 改角色 / 显示名 / 邮箱 / 禁用 / 重置密码；不能修改自己的邮箱或密码；`tokenBanned` + `tokenBanHours` 可封禁 Token |
 | `DELETE /admin/api/users/{id}` | 删除账户（图片保留，变为无归属） |
 
 ### 命令行上传
@@ -286,6 +299,7 @@ HMCL 支持网络背景图片，HTTP 和 HTTPS 都可以，**没有 HTTPS 不一
 | `smtpPass` | 空 | SMTP 密码/授权码，只保存不回传（仅站长可改） |
 | `rateLimitGuest` | `200` | 游客每分钟 GET 次数（按 IP） |
 | `rateLimitUser` | `2000` | 注册用户每分钟 GET 次数（按账户） |
+| `tokenBanHours` | `12` | Token 触发频繁超限后的默认临时封禁小时数 |
 | `smtpFrom` | 空 | 发件地址（仅站长可改） |
 | `maxUploadMB` | `20` | 单张上限 |
 | `port` | `2618` | 端口（`PORT` 环境变量优先；仅站长可修改） |

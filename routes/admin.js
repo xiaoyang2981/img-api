@@ -82,6 +82,7 @@ const settingPayload = (user) => {
         maxUploadMB: config.maxUploadMB,
         rateLimitGuest: config.rateLimitGuest,
         rateLimitUser: config.rateLimitUser,
+        tokenBanHours: config.tokenBanHours,
         canEditPort: user?.role === 'owner'
     };
 };
@@ -97,6 +98,10 @@ const imagePayload = (c, image, user) => ({
     canEdit: canEditImage(user, image)
 });
 
+const tokenBanActive = (user) => Boolean(
+    user?.tokenBannedUntil && Date.parse(user.tokenBannedUntil) > Date.now()
+);
+
 const userPayload = (user, currentUser, imageCounts) => ({
     ...publicUser(user),
     roleLabel: roleLabel(user.role),
@@ -105,7 +110,14 @@ const userPayload = (user, currentUser, imageCounts) => ({
     updatedAt: user.updatedAt,
     imageCount: imageCounts.get(user.id) || 0,
     isSelf: user.id === currentUser.id,
-    canManage: canManageUser(currentUser, user)
+    canManage: canManageUser(currentUser, user),
+    hasApiToken: Boolean(user.hasApiToken),
+    apiTokenHint: user.apiTokenHint || null,
+    apiTokenCreatedAt: user.apiTokenCreatedAt || null,
+    tokenRateLimitHits: Number(user.tokenRateLimitHits) || 0,
+    tokenLastHitAt: user.tokenLastHitAt || null,
+    tokenBannedUntil: user.tokenBannedUntil || null,
+    tokenBanned: tokenBanActive(user)
 });
 
 // —— 个人信息 ——
@@ -120,9 +132,15 @@ const profilePayload = (user) => {
     return {
         user: {
             ...publicUser(user),
-            apiToken: user.apiToken || null,
             createdAt: user.createdAt,
-            updatedAt: user.updatedAt
+            updatedAt: user.updatedAt,
+            hasApiToken: Boolean(user.hasApiToken),
+            apiTokenHint: user.apiTokenHint || null,
+            apiTokenCreatedAt: user.apiTokenCreatedAt || null,
+            tokenRateLimitHits: Number(user.tokenRateLimitHits) || 0,
+            tokenLastHitAt: user.tokenLastHitAt || null,
+            tokenBannedUntil: user.tokenBannedUntil || null,
+            tokenBanned: tokenBanActive(user)
         },
         siteName: config.siteName,
         mailConfigured: isMailConfigured(config)
@@ -633,6 +651,48 @@ adminRoutes.put('/api/profile/email', requireAuth, updateProfileEmail);
 adminRoutes.post('/api/profile/password-code', requireAuth, sendProfilePasswordCode);
 adminRoutes.put('/api/profile/password', requireAuth, updateProfilePassword);
 
+adminRoutes.post('/api/profile/token', requireAuth, async (c) => {
+    const user = c.get('user');
+
+    if (user.hasApiToken) {
+        return c.json({ error: true, message: 'Token 已存在，请先吊销并重新生成' }, 409);
+    }
+    if (tokenBanActive(user)) {
+        return c.json({ error: true, message: 'Token 已被临时封禁，暂时不能创建' }, 403);
+    }
+
+    const issued = db.issueApiToken(user.id);
+    if (!issued) return c.json({ error: true, message: '账户不存在' }, 404);
+
+    return c.json({
+        token: issued.token,
+        hint: issued.hint,
+        createdAt: issued.createdAt,
+        profile: profilePayload(db.getUserById(user.id))
+    });
+});
+
+adminRoutes.post('/api/profile/token/revoke', requireAuth, async (c) => {
+    const user = c.get('user');
+
+    if (!user.hasApiToken) {
+        return c.json({ error: true, message: '当前账户还没有 Token' }, 400);
+    }
+    if (tokenBanActive(user)) {
+        return c.json({ error: true, message: 'Token 已被临时封禁，暂时不能吊销' }, 403);
+    }
+
+    const issued = db.issueApiToken(user.id);
+    if (!issued) return c.json({ error: true, message: '账户不存在' }, 404);
+
+    return c.json({
+        token: issued.token,
+        hint: issued.hint,
+        createdAt: issued.createdAt,
+        profile: profilePayload(db.getUserById(user.id))
+    });
+});
+
 // 兼容旧接口：现在同样需要当前邮箱验证码
 adminRoutes.post('/api/auth/password', requireAuth, updateProfilePassword);
 
@@ -925,6 +985,7 @@ adminRoutes.get('/api/users', requireRoles('owner', 'admin'), (c) => {
 
     return c.json({
         assignableRoles: assignableRoles(current.role),
+        tokenBanHours: getConfig().tokenBanHours,
         users: db.listUsers().map((user) => userPayload(user, current, counts))
     });
 });
@@ -1007,6 +1068,39 @@ adminRoutes.patch('/api/users/:id', requireRoles('owner', 'admin'), async (c) =>
     }
 
     const patch = {};
+    const config = getConfig();
+    let tokenBanUntil;
+    let updateTokenBan = false;
+
+    if (body.tokenBanned !== undefined) {
+        if (typeof body.tokenBanned !== 'boolean') {
+            return c.json({ error: true, message: 'Token 封禁状态格式不正确' }, 400);
+        }
+
+        updateTokenBan = true;
+
+        if (body.tokenBanned) {
+            const hours = Number(body.tokenBanHours ?? config.tokenBanHours);
+            if (!Number.isFinite(hours) || hours < 1 || hours > 8760) {
+                return c.json({ error: true, message: '封禁时长需为 1–8760 小时' }, 400);
+            }
+            tokenBanUntil = new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
+        } else {
+            tokenBanUntil = null;
+        }
+    } else if (body.tokenBanHours !== undefined) {
+        if (!tokenBanActive(target)) {
+            return c.json({ error: true, message: '当前账户没有生效的 Token 封禁' }, 400);
+        }
+
+        const hours = Number(body.tokenBanHours);
+        if (!Number.isFinite(hours) || hours < 1 || hours > 8760) {
+            return c.json({ error: true, message: '封禁时长需为 1–8760 小时' }, 400);
+        }
+
+        updateTokenBan = true;
+        tokenBanUntil = new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
+    }
 
     if (typeof body.displayName === 'string') {
         patch.displayName = normalizeDisplayName(body.displayName);
@@ -1039,7 +1133,11 @@ adminRoutes.patch('/api/users/:id', requireRoles('owner', 'admin'), async (c) =>
         );
     }
 
-    const user = await db.updateUser(target.id, patch);
+    let user = await db.updateUser(target.id, patch);
+
+    if (updateTokenBan) {
+        user = db.setTokenBan(target.id, tokenBanUntil);
+    }
 
     if (body.disabled === true) {
         db.deleteUserSessions(target.id);

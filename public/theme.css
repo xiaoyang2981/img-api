@@ -190,6 +190,7 @@ html[data-theme="light"] .badge.moderator { color: #5b21b6; border-color: rgba(9
 html[data-theme="light"] .badge.member { color: #166534; border-color: rgba(22, 101, 52, .3); background: #f0fdf4; }
 html[data-theme="light"] .badge.self { color: #166534; border-color: rgba(22, 101, 52, .3); background: #f0fdf4; }
 html[data-theme="light"] .badge.off { color: #b91c1c; border-color: rgba(185, 28, 28, .3); background: #fef2f2; }
+html[data-theme="light"] .badge.warn { color: #a16207; border-color: rgba(161, 98, 7, .35); background: #fffbeb; }
 
 html[data-theme="light"] .tab { color: var(--muted); }
 html[data-theme="light"] .tab.active {

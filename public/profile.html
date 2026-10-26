@@ -63,6 +63,19 @@
         font-size: .76rem; line-height: 1.6; word-break: break-all;
     }
     .token-line button { flex: none; }
+    .overlay {
+        position: fixed; inset: 0; background: rgba(6,8,12,.82); backdrop-filter: blur(4px);
+        display: none; align-items: center; justify-content: center; padding: 20px; z-index: 50;
+    }
+    .overlay.on { display: flex; }
+    .dialog {
+        width: min(560px, 100%); background: #171a22; border: 1px solid var(--border);
+        border-radius: 16px; padding: 24px;
+    }
+    .dialog h2 { font-size: 1rem; margin-bottom: 8px; }
+    .dialog p { color: var(--muted); font-size: .82rem; line-height: 1.7; margin-bottom: 14px; }
+    .dialog .token-line { margin-bottom: 14px; }
+    .dialog .row { justify-content: flex-end; }
     .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
     button {
         background: linear-gradient(45deg, #50b7fe, #3aa7fe); color: #fff; border: none;
@@ -146,14 +159,15 @@
     <section class="panel">
         <div class="section-head">
             <h2>API Token</h2>
-            <span class="status" id="tokenStatus">已生成</span>
+            <span class="status" id="tokenStatus">未创建</span>
         </div>
-        <p class="hint">用于访问 <code>/random</code>、<code>/api/v1</code>、<code>/list</code> 等接口。携带有效 Token 后按注册用户速率统计。</p>
-        <div class="token-line">
-            <code id="apiToken">…</code>
-            <button type="button" class="ghost" id="copyTokenBtn">复制</button>
+        <p class="hint">用于访问 <code>/random</code>、<code>/api/v1</code>、<code>/list</code> 等接口。Token 只会在创建或重新生成时显示一次，请立即复制保存。</p>
+        <p class="field-help" id="tokenMeta">尚未创建 API Token。</p>
+        <div class="row">
+            <button type="button" id="createTokenBtn">创建 Token</button>
+            <button type="button" class="ghost" id="revokeTokenBtn" disabled>吊销并重新生成</button>
         </div>
-        <p class="field-help">可以放在 <code>Authorization: Bearer &lt;token&gt;</code>、<code>X-API-Token</code> 或 <code>?token=...</code> 中。请勿公开分享。</p>
+        <p class="field-help" id="tokenNote">Token 遗失后需要吊销并重新生成，旧 Token 会立即失效。</p>
     </section>
 
     <section class="panel" id="emailPanel">
@@ -215,6 +229,21 @@
         <span>© <span data-year>2026</span> <span data-footer-site>梦星的小图床</span> · img-api</span>
         <span>All rights reserved.</span>
     </footer>
+</div>
+
+<div class="overlay" id="tokenDialog">
+    <div class="dialog">
+        <h2>新的 API Token</h2>
+        <p>这个 Token 只会显示这一次。关闭后无法再次查看，请立即复制保存。</p>
+        <div class="token-line">
+            <code id="newToken">…</code>
+            <button type="button" class="ghost" id="copyNewTokenBtn">复制</button>
+        </div>
+        <p>可以放在 <code>Authorization: Bearer &lt;token&gt;</code>、<code>X-API-Token</code> 或 <code>?token=...</code> 中。请勿公开分享。</p>
+        <div class="row">
+            <button type="button" id="closeTokenDialogBtn">我已保存</button>
+        </div>
+    </div>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -292,11 +321,27 @@
         $('accountMeta').textContent = '@' + user.username + ' · ' + roleText + ' · 加入于 ' + fmtDate(user.createdAt);
         $('usernameText').textContent = user.username;
 
-        const apiToken = user.apiToken || '';
-        $('apiToken').textContent = apiToken || '未生成';
-        $('tokenStatus').textContent = apiToken ? '已生成' : '未生成';
-        $('tokenStatus').className = 'status ' + (apiToken ? 'ok' : 'warn');
-        $('copyTokenBtn').disabled = !apiToken;
+        const hasToken = Boolean(user.hasApiToken);
+        const bannedUntil = user.tokenBannedUntil && Date.parse(user.tokenBannedUntil) > Date.now()
+            ? user.tokenBannedUntil
+            : null;
+        const tokenBanned = Boolean(bannedUntil);
+
+        $('tokenStatus').textContent = tokenBanned ? '已封禁' : (hasToken ? '已创建' : '未创建');
+        $('tokenStatus').className = 'status ' + (tokenBanned ? 'warn' : (hasToken ? 'ok' : ''));
+        $('tokenMeta').textContent = hasToken
+            ? 'Token 尾号 ' + (user.apiTokenHint || '-') +
+                ' · 创建于 ' + fmtDate(user.apiTokenCreatedAt) +
+                (user.tokenRateLimitHits > 0 ? ' · 限流触发 ' + user.tokenRateLimitHits + ' 次' : '') +
+                (tokenBanned ? ' · 已封禁至 ' + fmtDate(bannedUntil) : '')
+            : '尚未创建 API Token。';
+        $('tokenNote').textContent = tokenBanned
+            ? 'Token 已被临时封禁，请联系管理员解除，或等待自动解封。'
+            : (hasToken
+                ? 'Token 只显示一次；如果遗失，请吊销并重新生成。'
+                : '创建后会弹窗显示一次，请立即复制保存。');
+        $('createTokenBtn').disabled = hasToken || tokenBanned;
+        $('revokeTokenBtn').disabled = !hasToken || tokenBanned;
 
         $('workspaceLink').href = BASE + (role === 'moderator' ? '/admin/review' : '/admin');
         $('workspaceLink').textContent = role === 'moderator' ? '返回审核台' : '返回后台';
@@ -520,16 +565,12 @@
         }
     };
 
-    $('copyTokenBtn').onclick = async () => {
-        const token = state?.user?.apiToken;
-        if (!token) {
-            toast('API Token 尚未生成', true);
-            return;
-        }
+    let currentNewToken = '';
 
+    const copyToClipboard = async (text) => {
         const fallbackCopy = () => {
             const textarea = document.createElement('textarea');
-            textarea.value = token;
+            textarea.value = text;
             textarea.setAttribute('readonly', '');
             textarea.style.position = 'fixed';
             textarea.style.top = '-1000px';
@@ -541,22 +582,74 @@
             if (!ok) throw new Error('copy failed');
         };
 
-        try {
-            if (navigator.clipboard?.writeText) {
-                try {
-                    await navigator.clipboard.writeText(token);
-                } catch {
-                    // HTTP 页面或浏览器不允许 Clipboard API 时回退到 execCommand
-                    fallbackCopy();
-                }
-            } else {
-                fallbackCopy();
+        if (navigator.clipboard?.writeText) {
+            try {
+                await navigator.clipboard.writeText(text);
+                return;
+            } catch {
+                // HTTP 页面或浏览器不允许 Clipboard API 时回退到 execCommand
             }
-            toast('API Token 已复制');
+        }
+
+        fallbackCopy();
+    };
+
+    const showTokenDialog = (token) => {
+        currentNewToken = token;
+        $('newToken').textContent = token;
+        $('tokenDialog').classList.add('on');
+    };
+
+    const closeTokenDialog = () => {
+        currentNewToken = '';
+        $('newToken').textContent = '…';
+        $('tokenDialog').classList.remove('on');
+    };
+
+    $('createTokenBtn').onclick = async () => {
+        try {
+            const data = await request('/profile/token', { method: 'POST' });
+            state = data.profile;
+            render();
+            showTokenDialog(data.token);
+            toast('Token 已创建');
+        } catch (error) {
+            toast(error.message, true);
+        }
+    };
+
+    $('revokeTokenBtn').onclick = async () => {
+        if (!confirm('吊销后旧 Token 会立即失效，并生成新的 Token。继续吗？')) return;
+
+        try {
+            const data = await request('/profile/token/revoke', { method: 'POST' });
+            state = data.profile;
+            render();
+            showTokenDialog(data.token);
+            toast('Token 已重新生成');
+        } catch (error) {
+            toast(error.message, true);
+        }
+    };
+
+    $('copyNewTokenBtn').onclick = async () => {
+        if (!currentNewToken) {
+            toast('没有可复制的 Token', true);
+            return;
+        }
+
+        try {
+            await copyToClipboard(currentNewToken);
+            toast('Token 已复制');
         } catch {
             toast('复制失败，请手动选择 Token', true);
         }
     };
+
+    $('closeTokenDialogBtn').onclick = closeTokenDialog;
+    $('tokenDialog').addEventListener('click', (event) => {
+        if (event.target === $('tokenDialog')) closeTokenDialog();
+    });
 
     $('logoutBtn').onclick = async () => {
         try {
