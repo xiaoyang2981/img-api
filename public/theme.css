@@ -1,5 +1,41 @@
 /* 共享主题：切换按钮、深浅色覆盖、页脚版权 */
 
+/* 后台页面统一宽度与账户导航样式 */
+.wrap {
+    width: min(1280px, 100%);
+    max-width: 1280px;
+    margin: 0 auto;
+}
+
+.account {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    font-size: .82rem;
+    color: var(--muted);
+}
+
+.account a {
+    color: var(--accent);
+    text-decoration: none;
+    transition: color .15s;
+}
+
+.account a:hover { color: var(--text); }
+
+.account .who b { color: var(--ok); }
+.account .who .role { color: var(--muted); margin-left: 5px; }
+.account .who .role.owner { color: #ffb86b; }
+.account .who .role.admin { color: #6ee7a4; }
+.account .who .role.moderator { color: #c8b4ff; }
+.account .who .role.member { color: #8b93a7; }
+
+html[data-theme="light"] .account .who .role.owner { color: #b45309; }
+html[data-theme="light"] .account .who .role.admin { color: #15803d; }
+html[data-theme="light"] .account .who .role.moderator { color: #5b21b6; }
+html[data-theme="light"] .account .who .role.member { color: #64748b; }
+
 .theme-toggle {
     width: auto;
     margin: 0;

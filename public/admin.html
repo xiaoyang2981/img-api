@@ -153,9 +153,14 @@
 <body>
 <div class="wrap">
     <header>
-        <h1>🖼️ 图床后台 <span>·</span> <a href="/" id="homeLink" class="mini">前台</a> <a href="admin/profile" id="profileLink" class="mini">个人信息</a> <a href="admin/review" id="reviewLink" class="mini" hidden>审核</a> <a href="admin/setting" id="settingLink" class="mini" hidden>设置</a> <a href="admin/users" id="usersLink" class="mini" hidden>账户</a></h1>
+        <h1>🖼️ 图床后台</h1>
         <div class="account">
             <span class="who" id="whoami">加载中…</span>
+            <a href="/" id="homeLink">前台</a>
+            <a href="admin/profile" id="profileLink">个人信息</a>
+            <a href="admin/review" id="reviewLink" hidden>审核</a>
+            <a href="admin/setting" id="settingLink" hidden>设置</a>
+            <a href="admin/users" id="usersLink" hidden>账户管理</a>
             <button class="theme-toggle" type="button" data-theme-toggle>☀️</button>
             <button class="ghost mini" id="logoutBtn">退出登录</button>
         </div>
@@ -661,8 +666,8 @@
             }
 
             const canManage = currentUser.role === 'owner' || currentUser.role === 'admin';
-            $('whoami').innerHTML = '已登录 · <b>' + esc(currentUser.displayName || currentUser.username) + '</b>' +
-                '<span class="role">' + (ROLE_LABELS[currentUser.role] || currentUser.role) + '</span>';
+            $('whoami').innerHTML = '<b>' + esc(currentUser.displayName || currentUser.username) + '</b> · ' +
+                '<span class="role ' + esc(currentUser.role) + '">' + (ROLE_LABELS[currentUser.role] || currentUser.role) + '</span>';
             $('reviewLink').hidden = !canManage;
             $('usersLink').hidden = !canManage;
             $('settingLink').hidden = !canManage;

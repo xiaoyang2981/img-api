@@ -314,7 +314,7 @@
         const roleText = ROLE_LABELS[role] || role;
         const hasEmail = Boolean(user.email);
 
-        $('whoami').innerHTML = '<b>' + esc(name) + '</b> · ' + esc(roleText);
+        $('whoami').innerHTML = '<b>' + esc(name) + '</b> · <span class="role ' + esc(role) + '">' + esc(roleText) + '</span>';
         $('displayNameText').textContent = name;
         $('roleBadge').textContent = roleText;
         $('roleBadge').className = 'badge ' + role;

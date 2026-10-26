@@ -23,6 +23,7 @@
     h1 { font-size: 1.3rem; }
     .account { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: .82rem; color: var(--muted); }
     .account .who b { color: var(--ok); }
+    .account .who .role { color: var(--accent); margin-left: 5px; }
     .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 20px; margin-bottom: 18px; }
     .panel h2 { font-size: .98rem; margin-bottom: 14px; }
     .create { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
@@ -78,9 +79,10 @@
         <h1>👥 账户管理</h1>
         <div class="account">
             <span class="who" id="whoami">…</span>
+            <a href="/" id="homeLink">前台</a>
             <a href="/admin/profile" id="profileLink">个人信息</a>
             <a href="/admin/setting" id="settingLink">设置</a>
-            <a href="/admin" id="backLink">← 返回图库</a>
+            <a href="/admin" id="backLink">返回后台</a>
             <button class="theme-toggle" type="button" data-theme-toggle>☀️</button>
             <button class="ghost mini" id="logoutBtn">退出登录</button>
         </div>
@@ -118,6 +120,7 @@
     const API = BASE + '/admin/api';
     const $ = (id) => document.getElementById(id);
 
+    document.getElementById('homeLink').href = BASE + '/';
     document.getElementById('profileLink').href = BASE + '/admin/profile';
     document.getElementById('profileHintLink').href = BASE + '/admin/profile';
     document.getElementById('settingLink').href = BASE + '/admin/setting';
@@ -388,7 +391,7 @@
             const me = await request('/auth/me');
             currentUser = me.user;
             $('whoami').innerHTML = '<b>' + esc(currentUser.displayName || currentUser.username) + '</b> · ' +
-                esc(labelOf(currentUser.role));
+                '<span class="role ' + esc(currentUser.role) + '">' + esc(labelOf(currentUser.role)) + '</span>';
 
             try {
                 const settings = await request('/settings');
