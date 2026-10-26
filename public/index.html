@@ -295,7 +295,7 @@
             <h1>把喜欢的图，<br>变成<span>随手可用的随机图源。</span></h1>
             <p class="lead">
                 上传原图，自动生成 WebP 副本。一个随机接口就能给壁纸、
-                博客背景和第三方站点供图；支持标签、评级和多种尺寸参数。
+                博客背景和第三方站点供图；支持标签筛选和多种尺寸参数。
             </p>
 
             <div class="actions">
@@ -347,7 +347,6 @@
     const shuffleBtn = $('shuffleBtn');
     let allowRegistration = true;
     let galleryCount = null;
-    let tagsEnabled = false;
     const ROLE_LABELS = { owner: '站长', admin: '管理员', moderator: '审核员', member: '成员' };
 
     const applySiteName = (name) => {
@@ -390,9 +389,8 @@
                 placeholder.hidden = true;
 
                 const tags = Array.isArray(data.tags) ? data.tags : [];
-                const rating = data.rating ? String(data.rating).toUpperCase() : '';
-                $('imageMeta').textContent = [data.width + ' × ' + data.height, rating].filter(Boolean).join(' · ');
-                $('imageTags').textContent = tagsEnabled && tags.length ? '#' + tags.join(' #') : '';
+                $('imageMeta').textContent = data.width + ' × ' + data.height;
+                $('imageTags').textContent = tags.length ? '#' + tags.join(' #') : '';
                 shuffleBtn.disabled = false;
             };
             next.onerror = () => {
@@ -412,7 +410,6 @@
             if (!response.ok) return false;
             const data = await response.json();
             galleryCount = Number(data.count ?? 0);
-            tagsEnabled = Boolean(data.enableTags);
             if (data.siteName) applySiteName(data.siteName);
             $('statCount').textContent = String(galleryCount);
             return true;

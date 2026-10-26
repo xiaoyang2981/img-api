@@ -79,11 +79,12 @@ $env:PORT=3000; node server.js
 | `GET /random` | 随机一张，302 跳转（默认 WebP） |
 | `GET /random?format=json` | 返回 JSON，含 `url` / `origin` / `webp` |
 | `GET /random?type=origin` | 强制返回原图 |
-| `GET /random?tag=wolf,dragon` | 按标签筛选（需在设置里启用标签） |
-| `GET /random?rating=sfw` | 按评级筛选：`sfw` / `questionable` / `nsfw` |
+| `GET /random?tag=wolf` | 只从带 `wolf` 标签的图片里随机 |
+| `GET /random?tag=wolf,dragon` | 从带 `wolf` **或** `dragon` 的图片里随机 |
+| `GET /random?tag=wolf,dragon&tagMode=all` | 只从同时带 `wolf` 和 `dragon` 的图片里随机 |
 | `GET /i/{file}` | 原图，`Cache-Control: immutable` |
 | `GET /w/{file}` | WebP 版本 |
-| `GET /list?page=1&pageSize=40&q=&tag=&rating=` | 分页列表（默认需要登录） |
+| `GET /list?page=1&pageSize=40&q=&tag=&tagMode=` | 分页列表（默认需要登录） |
 | `GET /info/{id}` | 单张图片信息 |
 | `GET /stats` | 数量与体积统计 |
 | `GET /health` | 健康检查 |
@@ -104,9 +105,9 @@ $env:PORT=3000; node server.js
 
 | 接口 | 说明 |
 |---|---|
-| `POST /admin/api/upload` | multipart，字段 `file`（可重复）、`tags`、`rating`、`title`、`source`；上传后为待审核 |
+| `POST /admin/api/upload` | multipart，字段 `file`（可重复）、`tags`、`title`、`source`；上传后为待审核 |
 | `GET /admin/api/images` | 后台列表，支持 `status=pending/approved/rejected`；成员只能看自己的图 |
-| `PATCH /admin/api/images/{id}` | 改标签 / 评级 / 标题 / 来源（本人、管理员或站长） |
+| `PATCH /admin/api/images/{id}` | 改标签 / 标题 / 来源（本人、管理员或站长） |
 | `DELETE /admin/api/images/{id}` | 删除原图 + webp（本人、管理员或站长） |
 | `POST /admin/api/scan` | 扫描 `data/images/`（站长/管理员），新增图片为待审核 |
 | `GET/PUT /admin/api/settings` | 读取设置 / 保存设置（站长/管理员；端口仅站长） |
@@ -141,21 +142,20 @@ TOKEN=$(curl -s http://localhost:2618/admin/api/auth/login \
 curl -X POST http://localhost:2618/admin/api/upload \
   -H "Authorization: Bearer $TOKEN" \
   -F "file=@wallpaper.png" \
-  -F "tags=wolf,night" \
-  -F "rating=sfw"
+  -F "tags=wolf,night"
 ```
 
 浏览器页面使用 Cookie，不需要手动传令牌。
 
-## 评级（SFW / Questionable / NSFW）
+## 标签
 
-上传框左侧的下拉框是**手动评级**，不会自动识别图片内容：
+评级系统已移除，标签是唯一的分类方式，并且始终启用。
 
-- `SFW`：普通内容
-- `Questionable`：擦边 / 需谨慎
-- `NSFW`：成人内容
-
-它只影响 `/random?rating=` 和 `/list?rating=` 的筛选。不填默认 `SFW`。
+- `/random?tag=wolf`：只取带 `wolf` 标签的图
+- `/random?tag=wolf,dragon`：默认取带 `wolf` **或** `dragon` 的图
+- `/random?tag=wolf,dragon&tagMode=all`：只取同时带这两个标签的图
+- `/list?tag=...&tagMode=...` 使用相同规则
+- 标签在上传/编辑时填写，逗号分隔；自动转小写、去重
 
 ## 设置项
 
@@ -164,7 +164,6 @@ curl -X POST http://localhost:2618/admin/api/upload \
 | 字段 | 默认 | 说明 |
 |---|---|---|
 | `siteName` | `梦星的小图床` | 前台左上角显示的名称，可在设置页修改 |
-| `enableTags` | `false` | 关闭时上传/编辑界面隐藏标签，`/random` 忽略 `tag` 参数，纯随机 |
 | `randomPreferWebp` | `true` | `/random` 默认跳 WebP |
 | `allowPublicList` | `false` | `/list` 是否需要登录 |
 | `allowRegistration` | `true` | 是否允许前台公开注册；关闭后注册按钮隐藏，接口返回 403 |

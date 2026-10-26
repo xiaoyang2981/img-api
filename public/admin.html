@@ -94,9 +94,6 @@
         display: inline-block; padding: 1px 7px; border-radius: 99px;
         font-size: .7rem; letter-spacing: .02em;
     }
-    .badge.sfw { background: rgba(46, 204, 113, .16); color: #6ee7a4; }
-    .badge.questionable { background: rgba(241, 196, 15, .16); color: #ffd75e; }
-    .badge.nsfw { background: rgba(231, 76, 60, .18); color: #ff8d80; }
     .badge.pending { background: rgba(241, 196, 15, .16); color: #ffd75e; }
     .badge.approved { background: rgba(46, 204, 113, .16); color: #6ee7a4; }
     .badge.rejected { background: rgba(231, 76, 60, .18); color: #ff8d80; }
@@ -151,12 +148,7 @@
             <input type="file" id="fileInput" accept="image/png,image/jpeg,image/webp,image/gif,image/avif" multiple hidden>
         </div>
         <div class="row" id="uploadMeta">
-            <input type="text" id="tags" placeholder="标签，逗号分隔：wolf,dragon" style="flex:2;min-width:200px;" hidden>
-            <select id="rating">
-                <option value="sfw">SFW</option>
-                <option value="questionable">Questionable</option>
-                <option value="nsfw">NSFW</option>
-            </select>
+            <input type="text" id="tags" placeholder="标签，逗号分隔：wolf,dragon" style="flex:2;min-width:200px;">
             <input type="text" id="title" placeholder="标题（可选）" style="flex:2;min-width:180px;">
             <input type="text" id="source" placeholder="来源 / 画师链接（可选）" style="flex:2;min-width:180px;">
         </div>
@@ -190,17 +182,9 @@
     <div class="dialog">
         <h2>编辑图片信息</h2>
         <input type="hidden" id="editId">
-        <div class="field" id="editTagsField" hidden>
+        <div class="field" id="editTagsField">
             <label>标签（逗号分隔）</label>
             <input type="text" id="editTags" placeholder="wolf, dragon, artist-name">
-        </div>
-        <div class="field">
-            <label>评级</label>
-            <select id="editRating">
-                <option value="sfw">SFW</option>
-                <option value="questionable">Questionable</option>
-                <option value="nsfw">NSFW</option>
-            </select>
         </div>
         <div class="field">
             <label>标题</label>
@@ -234,7 +218,6 @@
     let page = 1;
     let search = '';
     let statusFilterValue = '';
-    let enableTags = false;
 
     const $ = (id) => document.getElementById(id);
     const grid = $('grid');
@@ -289,11 +272,9 @@
     };
 
     const badges = (image) => {
-        const cls = image.rating || 'sfw';
         const status = image.status || 'approved';
-        return '<span class="badge ' + cls + '">' + cls.toUpperCase() + '</span>' +
-            '<span class="badge ' + status + '" title="' + esc(image.reviewNote || '') + '">' +
-                (STATUS_LABELS[status] || status) + '</span>';
+        return '<span class="badge ' + status + '" title="' + esc(image.reviewNote || '') + '">' +
+            (STATUS_LABELS[status] || status) + '</span>';
     };
 
     const renderCards = (images) => {
@@ -320,7 +301,7 @@
                         '<span>' + fmtSize(image.size) + '</span>' +
                         (image.webpSize ? '<span>webp ' + fmtSize(image.webpSize) + '</span>' : '<span>无 webp</span>') +
                     '</div>' +
-                    (enableTags && tags ? '<div class="tags">#' + esc(tags) + '</div>' : '') +
+                    (tags ? '<div class="tags">#' + esc(tags) + '</div>' : '') +
                     '<div class="actions">' +
                         '<button class="mini ghost" data-copy="' + esc(image.url) + '">原图</button>' +
                         (image.webpUrl ? '<button class="mini ghost" data-copy="' + esc(image.webpUrl) + '">WebP</button>' : '') +
@@ -363,8 +344,7 @@
 
         const form = new FormData();
         for (const file of files) form.append('file', file);
-        form.append('tags', $('tags').hidden ? '' : $('tags').value);
-        form.append('rating', $('rating').value);
+        form.append('tags', $('tags').value);
         form.append('title', $('title').value);
         form.append('source', $('source').value);
 
@@ -444,7 +424,6 @@
             if (!image) return;
             $('editId').value = image.id;
             $('editTags').value = (image.tags || []).join(', ');
-            $('editRating').value = image.rating || 'sfw';
             $('editTitle').value = image.title || '';
             $('editSource').value = image.source || '';
             $('editOverlay').classList.add('on');
@@ -510,7 +489,6 @@
                 method: 'PATCH',
                 json: {
                     tags: $('editTags').value,
-                    rating: $('editRating').value,
                     title: $('editTitle').value,
                     source: $('editSource').value
                 }
@@ -521,12 +499,6 @@
         } catch (error) {
             toast(error.message, true);
         }
-    };
-
-    const applySettings = (settings) => {
-        enableTags = !!settings.enableTags;
-        $('tags').hidden = !enableTags;
-        $('editTagsField').hidden = !enableTags;
     };
 
     const boot = async () => {
@@ -548,7 +520,6 @@
             $('scanBtn').hidden = !canManage;
 
             const settings = await request('/settings');
-            applySettings(settings);
             document.title = (settings.siteName || '梦星的小图床') + ' · 后台';
             await load();
         } catch (error) {

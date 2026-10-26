@@ -8,6 +8,27 @@ import { canViewImage } from '../lib/roles.js';
 
 const CACHE_CONTROL = 'public, max-age=31536000, immutable';
 
+const tagFilter = (c) => {
+    const tags = (c.req.query('tag') || '')
+        .split(',')
+        .map((tag) => tag.trim().toLowerCase())
+        .filter(Boolean);
+
+    return {
+        tags,
+        mode: (c.req.query('tagMode') || 'any').toLowerCase() === 'all' ? 'all' : 'any'
+    };
+};
+
+const matchesTags = (image, tags, mode) => {
+    if (!tags.length) return true;
+
+    const imageTags = image.tags || [];
+    return mode === 'all'
+        ? tags.every((tag) => imageTags.includes(tag))
+        : tags.some((tag) => imageTags.includes(tag));
+};
+
 // 处理反向代理子路径：用实际命中的路由段数反推前缀
 // /i/abc.png -> ""，/img/i/abc.png -> "/img"，/admin/api/upload -> ""
 export const basePath = (c) => {
@@ -80,26 +101,14 @@ const serve = async (c, dir, name, mime) => {
     }
 };
 
-// GET /random?tag=&rating=&type=origin|webp&format=json
+// GET /random?tag=&tagMode=any|all&type=origin|webp&format=json
 export const randomHandler = async (c) => {
     const config = getConfig();
     let pool = index.getApproved();
+    const tags = tagFilter(c);
 
-    // 默认不启用标签，这时 tag 参数会被忽略，纯随机
-    if (config.enableTags) {
-        const tags = (c.req.query('tag') || '')
-            .split(',')
-            .map((tag) => tag.trim().toLowerCase())
-            .filter(Boolean);
-
-        if (tags.length) {
-            pool = pool.filter((image) => tags.every((tag) => (image.tags || []).includes(tag)));
-        }
-    }
-
-    const rating = (c.req.query('rating') || '').trim().toLowerCase();
-    if (rating) {
-        pool = pool.filter((image) => image.rating === rating);
+    if (tags.tags.length) {
+        pool = pool.filter((image) => matchesTags(image, tags.tags, tags.mode));
     }
 
     if (!pool.length) {
@@ -123,8 +132,7 @@ export const randomHandler = async (c) => {
             webp: image.webp ? `${origin}${prefix}/w/${image.webp}` : null,
             width: image.width,
             height: image.height,
-            tags: image.tags,
-            rating: image.rating
+            tags: image.tags
         });
     }
 
@@ -142,7 +150,7 @@ export const imageHandler = (c) => {
 // GET /w/:name —— webp 版本
 export const webpHandler = (c) => serve(c, WEBP_DIR, c.req.param('name'), 'image/webp');
 
-// GET /list?page=&pageSize=&q=&tag=&rating=
+// GET /list?page=&pageSize=&q=&tag=&tagMode=any|all
 export const listHandler = async (c) => {
     const config = getConfig();
     if (!config.allowPublicList && !getAuthUser(c)) {
@@ -152,16 +160,12 @@ export const listHandler = async (c) => {
     const page = Math.max(1, Number(c.req.query('page')) || 1);
     const pageSize = Math.min(200, Math.max(1, Number(c.req.query('pageSize')) || 40));
     const keyword = (c.req.query('q') || '').trim().toLowerCase();
-    const tag = (c.req.query('tag') || '').trim().toLowerCase();
-    const rating = (c.req.query('rating') || '').trim().toLowerCase();
+    const tags = tagFilter(c);
 
     let pool = [...index.getApproved()];
 
-    if (tag) {
-        pool = pool.filter((image) => (image.tags || []).includes(tag));
-    }
-    if (rating) {
-        pool = pool.filter((image) => image.rating === rating);
+    if (tags.tags.length) {
+        pool = pool.filter((image) => matchesTags(image, tags.tags, tags.mode));
     }
     if (keyword) {
         pool = pool.filter((image) => {
@@ -209,7 +213,6 @@ export const statsHandler = (c) => {
         ...data,
         totalSizeMB: Number((data.totalSize / 1024 / 1024).toFixed(2)),
         webpSizeMB: Number((data.webpSize / 1024 / 1024).toFixed(2)),
-        enableTags: getConfig().enableTags,
         siteName: getConfig().siteName
     });
 };

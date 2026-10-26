@@ -58,9 +58,9 @@
     .card .body { padding: 12px; display: flex; flex-direction: column; gap: 8px; }
     .meta { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; font-size: .74rem; color: var(--muted); }
     .badge { font-size: .68rem; padding: 2px 8px; border-radius: 99px; border: 1px solid var(--border); }
-    .badge.sfw, .badge.approved { color: #6ee7a4; border-color: rgba(46,204,113,.4); background: rgba(46,204,113,.1); }
-    .badge.questionable, .badge.pending { color: #ffd75e; border-color: rgba(241,196,15,.4); background: rgba(241,196,15,.1); }
-    .badge.nsfw, .badge.rejected { color: #ff8d80; border-color: rgba(231,76,60,.4); background: rgba(231,76,60,.1); }
+    .badge.approved { color: #6ee7a4; border-color: rgba(46,204,113,.4); background: rgba(46,204,113,.1); }
+    .badge.pending { color: #ffd75e; border-color: rgba(241,196,15,.4); background: rgba(241,196,15,.1); }
+    .badge.rejected { color: #ff8d80; border-color: rgba(231,76,60,.4); background: rgba(231,76,60,.1); }
     .title { font-size: .88rem; font-weight: 600; line-height: 1.5; word-break: break-all; }
     .sub { color: var(--muted); font-size: .74rem; line-height: 1.6; }
     .tags { color: var(--accent); font-size: .73rem; line-height: 1.5; word-break: break-all; }
@@ -202,7 +202,6 @@
                 '<div class="body">' +
                     '<div class="meta">' +
                         '<span class="badge ' + esc(image.status) + '">' + (STATUS_LABELS[image.status] || image.status) + '</span>' +
-                        '<span class="badge ' + esc(image.rating) + '">' + esc(image.rating).toUpperCase() + '</span>' +
                         '<span>' + image.width + '×' + image.height + '</span>' +
                     '</div>' +
                     '<div class="title">' + esc(image.title || image.id) + '</div>' +

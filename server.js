@@ -87,7 +87,7 @@ const getLocalIP = () => {
 };
 
 const start = async () => {
-    const config = await initConfig();
+    await initConfig();
     const images = await loadIndex();
     const port = getPort();
     const localIP = getLocalIP();
@@ -104,7 +104,7 @@ const start = async () => {
         console.log('🔐 账户系统: 用户名 + 密码（首次打开后台创建站长）');
         console.log(`   （账户、会话、图片索引和设置都保存在 ${DB_FILE}）`);
         console.log('');
-        console.log(`📦 图库数量: ${images.length} 张 | 标签功能: ${config.enableTags ? '已启用' : '未启用'}`);
+        console.log(`📦 图库数量: ${images.length} 张 | 标签系统: 已启用`);
         console.log(`👤 账户数量: ${userCount} 个${userCount ? '' : '（尚未初始化）'}`);
         console.log(`🔌 端口可通过环境变量 PORT 覆盖（当前 ${port}）`);
         console.log('');
