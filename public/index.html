@@ -348,6 +348,7 @@
     let allowRegistration = true;
     let galleryCount = null;
     let tagsEnabled = false;
+    const ROLE_LABELS = { owner: '站长', admin: '管理员', moderator: '审核员', member: '成员' };
 
     const applySiteName = (name) => {
         const value = String(name || '').trim() || '梦星的小图床';
@@ -372,7 +373,7 @@
             const response = await fetch(BASE + '/random?format=json&_=' + Date.now(), { cache: 'no-store' });
 
             if (response.status === 404) {
-                setPlaceholder('图库还是空的。登录后进入后台上传第一张图片吧。');
+                setPlaceholder('图库还没有已通过审核的图片。登录后上传并等待审核通过吧。');
                 return;
             }
             if (!response.ok) throw new Error('随机接口返回 ' + response.status);
@@ -438,24 +439,34 @@
 
     const applyUser = (user) => {
         const name = user.displayName || user.username;
+        const role = user.role || 'member';
+        const isModerator = role === 'moderator';
+
         $('navUser').hidden = false;
-        $('navUser').innerHTML = '已登录 · <b>' + escapeHtml(name) + '</b>';
+        $('navUser').innerHTML = '已登录 · <b>' + escapeHtml(name) + '</b> · ' + (ROLE_LABELS[role] || role);
         $('loginLink').hidden = true;
         $('registerLink').hidden = true;
         $('adminLink').hidden = false;
+        $('adminLink').href = isModerator ? BASE + '/admin/review' : BASE + '/admin';
+        $('adminLink').textContent = isModerator ? '审核台' : '进入后台';
         $('logoutBtn').hidden = false;
 
         $('primaryAction').hidden = false;
-        $('primaryAction').href = BASE + '/admin';
-        $('primaryAction').textContent = '进入后台';
-        $('secondaryAction').hidden = user.role !== 'admin';
-        if (user.role === 'admin') {
+        $('primaryAction').href = isModerator ? BASE + '/admin/review' : BASE + '/admin';
+        $('primaryAction').textContent = isModerator ? '进入审核' : '进入后台';
+
+        const canSettings = role === 'owner' || role === 'admin';
+        $('secondaryAction').hidden = !canSettings;
+        if (canSettings) {
             $('secondaryAction').href = BASE + '/admin/setting';
             $('secondaryAction').textContent = '账户设置';
         }
-        $('userHint').innerHTML = user.role === 'admin'
-            ? '已登录，可进入后台管理图片、账户和全局设置。'
-            : '已登录，可进入后台上传和管理自己的图片。';
+
+        $('userHint').innerHTML = isModerator
+            ? '已登录为审核员，可进入审核台处理待审核图片。'
+            : (role === 'owner' || role === 'admin'
+                ? '已登录，可进入后台管理图片、账户和全局设置。'
+                : '已登录，可进入后台上传和管理自己的图片。');
     };
 
     const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (ch) => ({
@@ -495,7 +506,7 @@
         const statsOk = await loadStats();
 
         if (statsOk && galleryCount === 0) {
-            setPlaceholder('图库还是空的。登录后进入后台上传第一张图片吧。');
+            setPlaceholder('图库还没有已通过审核的图片。登录后上传并等待审核通过吧。');
             return;
         }
 

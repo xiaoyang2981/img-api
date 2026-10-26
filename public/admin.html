@@ -97,6 +97,9 @@
     .badge.sfw { background: rgba(46, 204, 113, .16); color: #6ee7a4; }
     .badge.questionable { background: rgba(241, 196, 15, .16); color: #ffd75e; }
     .badge.nsfw { background: rgba(231, 76, 60, .18); color: #ff8d80; }
+    .badge.pending { background: rgba(241, 196, 15, .16); color: #ffd75e; }
+    .badge.approved { background: rgba(46, 204, 113, .16); color: #6ee7a4; }
+    .badge.rejected { background: rgba(231, 76, 60, .18); color: #ff8d80; }
     .tags { font-size: .74rem; color: var(--accent); line-height: 1.5; word-break: break-all; }
     .actions { display: flex; gap: 6px; flex-wrap: wrap; }
     .empty { text-align: center; color: var(--muted); padding: 46px 10px; }
@@ -133,7 +136,7 @@
 <body>
 <div class="wrap">
     <header>
-        <h1>🖼️ 图床后台 <span>·</span> <a href="/" id="homeLink" class="mini">前台</a> <a href="admin/setting" id="settingLink" class="mini">设置</a> <a href="admin/users" id="usersLink" class="mini" hidden>账户</a></h1>
+        <h1>🖼️ 图床后台 <span>·</span> <a href="/" id="homeLink" class="mini">前台</a> <a href="admin/review" id="reviewLink" class="mini" hidden>审核</a> <a href="admin/setting" id="settingLink" class="mini" hidden>设置</a> <a href="admin/users" id="usersLink" class="mini" hidden>账户</a></h1>
         <div class="account">
             <span class="who" id="whoami">加载中…</span>
             <button class="ghost mini" id="logoutBtn">退出登录</button>
@@ -163,6 +166,12 @@
     <div class="toolbar">
         <div class="left">
             <input type="text" id="search" placeholder="搜索 id / 标签 / 标题…" style="min-width:240px;">
+            <select id="statusFilter" title="审核状态">
+                <option value="">全部状态</option>
+                <option value="pending">待审核</option>
+                <option value="approved">已通过</option>
+                <option value="rejected">已拒绝</option>
+            </select>
             <button class="ghost" id="refreshBtn">刷新</button>
             <button class="ghost" id="scanBtn" title="把 data/images 里手动丢进去的图片补进索引">扫描目录</button>
         </div>
@@ -215,11 +224,16 @@
 
     document.getElementById('settingLink').href = BASE + '/admin/setting';
     document.getElementById('usersLink').href = BASE + '/admin/users';
+    document.getElementById('reviewLink').href = BASE + '/admin/review';
     document.getElementById('homeLink').href = BASE + '/';
+
+    const ROLE_LABELS = { owner: '站长', admin: '管理员', moderator: '审核员', member: '成员' };
+    const STATUS_LABELS = { pending: '待审核', approved: '已通过', rejected: '已拒绝' };
 
     let currentUser = null;
     let page = 1;
     let search = '';
+    let statusFilterValue = '';
     let enableTags = false;
 
     const $ = (id) => document.getElementById(id);
@@ -276,7 +290,10 @@
 
     const badges = (image) => {
         const cls = image.rating || 'sfw';
-        return '<span class="badge ' + cls + '">' + cls.toUpperCase() + '</span>';
+        const status = image.status || 'approved';
+        return '<span class="badge ' + cls + '">' + cls.toUpperCase() + '</span>' +
+            '<span class="badge ' + status + '" title="' + esc(image.reviewNote || '') + '">' +
+                (STATUS_LABELS[status] || status) + '</span>';
     };
 
     const renderCards = (images) => {
@@ -318,10 +335,12 @@
 
     const load = async () => {
         try {
-            const data = await request('/images?page=' + page + '&pageSize=24&q=' + encodeURIComponent(search));
+            const data = await request('/images?page=' + page + '&pageSize=24&q=' + encodeURIComponent(search) +
+                '&status=' + encodeURIComponent(statusFilterValue));
             currentImages = data.images;
-            $('count').textContent = '共 ' + data.total + ' 张 · 原图 ' + fmtSize(data.stats.totalSize) +
-                ' · webp ' + fmtSize(data.stats.webpSize);
+            const review = data.reviewStats || {};
+            $('count').textContent = '显示 ' + data.total + ' 张 · 待审核 ' + (review.pending || 0) +
+                ' · 已通过 ' + (review.approved || 0) + ' · 已拒绝 ' + (review.rejected || 0);
             renderCards(data.images);
             renderPager(data);
         } catch (error) {
@@ -369,10 +388,12 @@
             const data = await response.json();
             const okCount = (data.results || []).length;
             const dup = (data.results || []).filter((item) => item.duplicate).length;
+            const pending = (data.results || []).filter((item) => item.image.status === 'pending').length;
             const failed = (data.errors || []).length;
 
             if (okCount) {
                 toast('上传成功 ' + okCount + ' 张' + (dup ? '（其中 ' + dup + ' 张重复已跳过）' : '') +
+                    (pending ? '，已提交审核' : '') +
                     (failed ? '，失败 ' + failed + ' 张' : ''));
                 page = 1;
                 await load();
@@ -454,6 +475,12 @@
 
     $('refreshBtn').onclick = () => load();
 
+    $('statusFilter').addEventListener('change', () => {
+        statusFilterValue = $('statusFilter').value;
+        page = 1;
+        load();
+    });
+
     $('scanBtn').onclick = async () => {
         try {
             toast('正在扫描 data/images …');
@@ -506,11 +533,19 @@
         try {
             const me = await request('/auth/me');
             currentUser = me.user;
+
+            if (currentUser.role === 'moderator') {
+                location.href = BASE + '/admin/review';
+                return;
+            }
+
+            const canManage = currentUser.role === 'owner' || currentUser.role === 'admin';
             $('whoami').innerHTML = '已登录 · <b>' + esc(currentUser.displayName || currentUser.username) + '</b>' +
-                '<span class="role">' + (currentUser.role === 'admin' ? '管理员' : '成员') + '</span>';
-            $('usersLink').hidden = currentUser.role !== 'admin';
-            $('settingLink').hidden = currentUser.role !== 'admin';
-            $('scanBtn').hidden = currentUser.role !== 'admin';
+                '<span class="role">' + (ROLE_LABELS[currentUser.role] || currentUser.role) + '</span>';
+            $('reviewLink').hidden = !canManage;
+            $('usersLink').hidden = !canManage;
+            $('settingLink').hidden = !canManage;
+            $('scanBtn').hidden = !canManage;
 
             const settings = await request('/settings');
             applySettings(settings);

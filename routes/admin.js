@@ -12,11 +12,12 @@ import {
     loginKey,
     publicUser,
     recordLoginFailure,
-    requireAdmin,
     requireAuth,
+    requireRoles,
     setSessionCookie
 } from '../lib/auth.js';
 import { hashPassword, validatePassword, verifyPassword } from '../lib/password.js';
+import { ROLES, assignableRoles, canAssignRole, canEditImage, canManageUser, canReview, roleLabel } from '../lib/roles.js';
 import * as db from '../lib/db.js';
 import * as index from '../lib/index.js';
 import * as store from '../lib/store.js';
@@ -26,6 +27,7 @@ export const adminRoutes = new Hono();
 
 const ID_PATTERN = /^[a-f0-9]{24}$/;
 const USERNAME_PATTERN = /^[\p{L}\p{N}_.-]{3,32}$/u;
+const IMAGE_STATUSES = ['pending', 'approved', 'rejected'];
 
 const readJson = async (c) => c.req.json().catch(() => ({}));
 
@@ -41,19 +43,6 @@ const usernameError = (username) => {
 
 const isUniqueError = (error) => /UNIQUE constraint failed/i.test(error?.message || '');
 
-const settingPayload = () => {
-    const config = getConfig();
-    return {
-        siteName: config.siteName,
-        port: config.port,
-        enableTags: config.enableTags,
-        randomPreferWebp: config.randomPreferWebp,
-        allowPublicList: config.allowPublicList,
-        allowRegistration: config.allowRegistration,
-        maxUploadMB: config.maxUploadMB
-    };
-};
-
 const adminBase = (c) => {
     const pathname = new URL(c.req.url).pathname;
     return pathname.replace(/\/admin(\/.*)?$/, '');
@@ -61,53 +50,84 @@ const adminBase = (c) => {
 
 const redirectToLogin = (c) => c.redirect(`${adminBase(c)}/login`);
 
-const serveHtml = servePage;
+const homeForRole = (c, user) => user.role === 'moderator'
+    ? c.redirect(`${adminBase(c)}/admin/review`)
+    : c.redirect(`${adminBase(c)}/admin`);
 
-const canManageImage = (user, image) => user.role === 'admin' || image.ownerId === user.id;
+const settingPayload = (user) => {
+    const config = getConfig();
+
+    return {
+        siteName: config.siteName,
+        port: config.port,
+        enableTags: config.enableTags,
+        randomPreferWebp: config.randomPreferWebp,
+        allowPublicList: config.allowPublicList,
+        allowRegistration: config.allowRegistration,
+        maxUploadMB: config.maxUploadMB,
+        canEditPort: user?.role === 'owner'
+    };
+};
 
 const imagePayload = (c, image, user) => ({
     ...decorate(c, image),
     ownerId: image.ownerId,
     owner: image.ownerId ? (db.getUserById(image.ownerId)?.username || null) : null,
-    canEdit: canManageImage(user, image)
+    reviewer: image.reviewedBy ? (db.getUserById(image.reviewedBy)?.username || null) : null,
+    status: image.status,
+    reviewedAt: image.reviewedAt || null,
+    reviewNote: image.reviewNote || '',
+    canEdit: canEditImage(user, image)
 });
 
 const userPayload = (user, currentUser, imageCounts) => ({
     ...publicUser(user),
+    roleLabel: roleLabel(user.role),
     disabled: user.disabled,
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
     imageCount: imageCounts.get(user.id) || 0,
-    isSelf: user.id === currentUser.id
+    isSelf: user.id === currentUser.id,
+    canManage: canManageUser(currentUser, user)
 });
 
 // —— 页面 ——
 
 adminRoutes.get('/', (c) => {
-    if (db.countUsers() === 0) return serveHtml(c, 'login.html');
+    if (db.countUsers() === 0) return servePage(c, 'login.html');
 
     const user = getAuthUser(c);
-    return user ? serveHtml(c, 'admin.html') : serveHtml(c, 'login.html');
+    if (!user) return servePage(c, 'login.html');
+    if (user.role === 'moderator') return homeForRole(c, user);
+
+    return servePage(c, 'admin.html');
 });
 
 adminRoutes.get('/login', (c) => {
     const user = getAuthUser(c);
-    if (user) return c.redirect(`${adminBase(c)}/admin`);
-    return serveHtml(c, 'login.html');
+    if (user) return homeForRole(c, user);
+    return servePage(c, 'login.html');
 });
 
 adminRoutes.get('/setting', (c) => {
     const user = getAuthUser(c);
     if (!user) return redirectToLogin(c);
-    if (user.role !== 'admin') return c.text('需要管理员权限', 403);
-    return serveHtml(c, 'setting.html');
+    if (!['owner', 'admin'].includes(user.role)) return c.text('需要站长或管理员权限', 403);
+    return servePage(c, 'setting.html');
 });
 
 adminRoutes.get('/users', (c) => {
     const user = getAuthUser(c);
     if (!user) return redirectToLogin(c);
-    if (user.role !== 'admin') return c.text('需要管理员权限', 403);
-    return serveHtml(c, 'users.html');
+    if (!['owner', 'admin'].includes(user.role)) return c.text('需要站长或管理员权限', 403);
+    return servePage(c, 'users.html');
+});
+
+adminRoutes.get('/review', (c) => {
+    const user = getAuthUser(c);
+    if (!user) return redirectToLogin(c);
+    if (!canReview(user.role)) return c.text('需要审核权限', 403);
+    return servePage(c, 'review.html');
 });
 
 // —— 认证（公开）——
@@ -125,7 +145,7 @@ adminRoutes.get('/api/auth/status', (c) => {
 
 adminRoutes.post('/api/auth/setup', async (c) => {
     if (db.countUsers() > 0) {
-        return c.json({ error: true, message: '管理员已经初始化过了' }, 409);
+        return c.json({ error: true, message: '站长账户已经初始化过了' }, 409);
     }
 
     const body = await readJson(c);
@@ -144,7 +164,7 @@ adminRoutes.post('/api/auth/setup', async (c) => {
         user = db.createUser({
             username,
             passwordHash: await hashPassword(password),
-            role: 'admin',
+            role: 'owner',
             displayName: normalizeDisplayName(body.displayName) || username
         });
     } catch (error) {
@@ -154,7 +174,7 @@ adminRoutes.post('/api/auth/setup', async (c) => {
         throw error;
     }
 
-    // 旧版 index.json 迁移过来的图片没有归属，第一任管理员接管
+    // 旧版 index.json 迁移过来的图片没有归属，第一任站长接管
     db.adoptOwnerlessImages(user.id);
     await index.loadIndex();
 
@@ -166,7 +186,7 @@ adminRoutes.post('/api/auth/setup', async (c) => {
 
 adminRoutes.post('/api/auth/login', async (c) => {
     if (db.countUsers() === 0) {
-        return c.json({ error: true, message: '请先在 /admin 初始化管理员账号' }, 409);
+        return c.json({ error: true, message: '请先在 /admin 初始化站长账号' }, 409);
     }
 
     const body = await readJson(c);
@@ -200,7 +220,7 @@ adminRoutes.post('/api/auth/register', async (c) => {
         return c.json({ error: true, message: '注册暂未开放' }, 403);
     }
     if (db.countUsers() === 0) {
-        return c.json({ error: true, message: '系统尚未初始化，请先创建管理员账户' }, 409);
+        return c.json({ error: true, message: '系统尚未初始化，请先创建站长账户' }, 409);
     }
 
     const body = await readJson(c);
@@ -219,7 +239,7 @@ adminRoutes.post('/api/auth/register', async (c) => {
         user = db.createUser({
             username,
             passwordHash: await hashPassword(password),
-            role: 'user',
+            role: 'member',
             displayName: normalizeDisplayName(body.displayName) || username
         });
     } catch (error) {
@@ -267,25 +287,43 @@ adminRoutes.post('/api/auth/password', requireAuth, async (c) => {
 
 // —— 设置 ——
 
-adminRoutes.get('/api/settings', requireAuth, (c) => c.json(settingPayload()));
+adminRoutes.get('/api/settings', requireAuth, (c) => c.json(settingPayload(c.get('user'))));
 
-adminRoutes.put('/api/settings', requireAdmin, async (c) => {
+adminRoutes.put('/api/settings', requireRoles('owner', 'admin'), async (c) => {
+    const user = c.get('user');
     const body = await readJson(c);
+
+    // 端口属于危险项，只有站长可以修改；管理员提交时直接忽略
+    if (user.role !== 'owner') {
+        delete body.port;
+    }
+
     await updateConfig(body);
-    return c.json(settingPayload());
+    return c.json(settingPayload(user));
 });
 
 // —— 图片 ——
 
-adminRoutes.get('/api/images', requireAuth, (c) => {
+adminRoutes.get('/api/images', requireRoles('owner', 'admin', 'member'), (c) => {
     const user = c.get('user');
     const page = Math.max(1, Number(c.req.query('page')) || 1);
     const pageSize = Math.min(200, Math.max(1, Number(c.req.query('pageSize')) || 40));
     const keyword = (c.req.query('q') || '').trim().toLowerCase();
     const rating = (c.req.query('rating') || '').trim().toLowerCase();
+    const status = (c.req.query('status') || '').trim().toLowerCase();
 
     let pool = [...index.getAll()];
 
+    // 成员只能看到自己上传的图片；站长/管理员看全部
+    if (user.role === 'member') {
+        pool = pool.filter((image) => image.ownerId === user.id);
+    }
+
+    const visible = [...pool];
+
+    if (IMAGE_STATUSES.includes(status)) {
+        pool = pool.filter((image) => image.status === status);
+    }
     if (rating) {
         pool = pool.filter((image) => image.rating === rating);
     }
@@ -307,12 +345,13 @@ adminRoutes.get('/api/images', requireAuth, (c) => {
         pageSize,
         pages: Math.ceil(total / pageSize) || 1,
         stats: index.stats(),
+        reviewStats: index.reviewStats(visible),
         images: pool.slice(start, start + pageSize).map((image) => imagePayload(c, image, user))
     });
 });
 
 // POST /admin/api/upload —— multipart/form-data，可一次传多张，字段名都叫 file
-adminRoutes.post('/api/upload', requireAuth, async (c) => {
+adminRoutes.post('/api/upload', requireRoles('owner', 'admin', 'member'), async (c) => {
     const user = c.get('user');
     const config = getConfig();
     const limit = config.maxUploadMB * 1024 * 1024;
@@ -365,7 +404,7 @@ adminRoutes.post('/api/upload', requireAuth, async (c) => {
     return c.json({ results, errors }, results.length ? 200 : 400);
 });
 
-adminRoutes.patch('/api/images/:id', requireAuth, async (c) => {
+adminRoutes.patch('/api/images/:id', requireRoles('owner', 'admin', 'member'), async (c) => {
     const user = c.get('user');
     const id = c.req.param('id');
 
@@ -377,7 +416,7 @@ adminRoutes.patch('/api/images/:id', requireAuth, async (c) => {
     if (!existing) {
         return c.json({ error: true, message: '图片不存在' }, 404);
     }
-    if (!canManageImage(user, existing)) {
+    if (!canEditImage(user, existing)) {
         return c.json({ error: true, message: '只能修改自己上传的图片' }, 403);
     }
 
@@ -386,7 +425,7 @@ adminRoutes.patch('/api/images/:id', requireAuth, async (c) => {
     return c.json(imagePayload(c, image, user));
 });
 
-adminRoutes.delete('/api/images/:id', requireAuth, async (c) => {
+adminRoutes.delete('/api/images/:id', requireRoles('owner', 'admin', 'member'), async (c) => {
     const user = c.get('user');
     const id = c.req.param('id');
 
@@ -398,7 +437,7 @@ adminRoutes.delete('/api/images/:id', requireAuth, async (c) => {
     if (!existing) {
         return c.json({ error: true, message: '图片不存在' }, 404);
     }
-    if (!canManageImage(user, existing)) {
+    if (!canEditImage(user, existing)) {
         return c.json({ error: true, message: '只能删除自己上传的图片' }, 403);
     }
 
@@ -406,8 +445,8 @@ adminRoutes.delete('/api/images/:id', requireAuth, async (c) => {
     return c.json({ deleted: image.id });
 });
 
-// 扫描 data/images/，把手动丢进去的图片补进索引
-adminRoutes.post('/api/scan', requireAdmin, async (c) => {
+// 扫描 data/images/，把手动丢进去的图片补进索引（会进入待审核）
+adminRoutes.post('/api/scan', requireRoles('owner', 'admin'), async (c) => {
     const user = c.get('user');
     const { added, skipped } = await store.scanDirectory(user.id);
 
@@ -418,24 +457,87 @@ adminRoutes.post('/api/scan', requireAdmin, async (c) => {
     });
 });
 
-adminRoutes.get('/api/stats', requireAuth, (c) => c.json(index.stats()));
+adminRoutes.get('/api/stats', requireRoles('owner', 'admin', 'member'), (c) => {
+    const user = c.get('user');
+    const visible = user.role === 'member'
+        ? index.getAll().filter((image) => image.ownerId === user.id)
+        : index.getAll();
 
-// —— 账户管理（仅管理员）——
+    return c.json({
+        ...index.stats(),
+        review: index.reviewStats(visible)
+    });
+});
 
-adminRoutes.get('/api/users', requireAdmin, (c) => {
+// —— 审核 ——
+
+adminRoutes.get('/api/review', requireRoles('owner', 'admin', 'moderator'), (c) => {
+    const user = c.get('user');
+    const page = Math.max(1, Number(c.req.query('page')) || 1);
+    const pageSize = Math.min(120, Math.max(1, Number(c.req.query('pageSize')) || 24));
+    const status = (c.req.query('status') || 'pending').toLowerCase();
+    const filter = IMAGE_STATUSES.includes(status) ? status : 'pending';
+
+    const pool = [...index.getByStatus(filter)].reverse();
+    const total = pool.length;
+    const start = (page - 1) * pageSize;
+
+    return c.json({
+        total,
+        page,
+        pageSize,
+        pages: Math.ceil(total / pageSize) || 1,
+        status: filter,
+        stats: index.reviewStats(),
+        images: pool.slice(start, start + pageSize).map((image) => imagePayload(c, image, user))
+    });
+});
+
+adminRoutes.patch('/api/review/:id', requireRoles('owner', 'admin', 'moderator'), async (c) => {
+    const user = c.get('user');
+    const id = c.req.param('id');
+
+    if (!ID_PATTERN.test(id)) {
+        return c.json({ error: true, message: 'ID 格式不正确' }, 400);
+    }
+
+    const body = await readJson(c);
+    const status = String(body.status || '').toLowerCase();
+
+    if (!IMAGE_STATUSES.includes(status)) {
+        return c.json({ error: true, message: '审核状态不正确' }, 400);
+    }
+
+    const image = await index.setImageStatus(id, status, user.id, body.note);
+    if (!image) {
+        return c.json({ error: true, message: '图片不存在' }, 404);
+    }
+
+    return c.json(imagePayload(c, image, user));
+});
+
+// —— 账户管理（站长 / 管理员）——
+
+adminRoutes.get('/api/users', requireRoles('owner', 'admin'), (c) => {
     const current = c.get('user');
     const counts = db.countImagesByOwner();
 
     return c.json({
+        assignableRoles: assignableRoles(current.role),
         users: db.listUsers().map((user) => userPayload(user, current, counts))
     });
 });
 
-adminRoutes.post('/api/users', requireAdmin, async (c) => {
+adminRoutes.post('/api/users', requireRoles('owner', 'admin'), async (c) => {
+    const current = c.get('user');
     const body = await readJson(c);
     const username = normalizeUsername(body.username);
     const password = String(body.password || '');
-    const role = body.role === 'admin' ? 'admin' : 'user';
+    const role = String(body.role || 'member');
+
+    if (!ROLES.includes(role) || !canAssignRole(current.role, role)) {
+        return c.json({ error: true, message: '不能创建这个身份组的账户' }, 403);
+    }
 
     const invalidUsername = usernameError(username);
     if (invalidUsername) return c.json({ error: true, message: invalidUsername }, 400);
@@ -459,10 +561,10 @@ adminRoutes.post('/api/users', requireAdmin, async (c) => {
         throw error;
     }
 
-    return c.json(userPayload(user, c.get('user'), db.countImagesByOwner()), 201);
+    return c.json(userPayload(user, current, db.countImagesByOwner()), 201);
 });
 
-adminRoutes.patch('/api/users/:id', requireAdmin, async (c) => {
+adminRoutes.patch('/api/users/:id', requireRoles('owner', 'admin'), async (c) => {
     const current = c.get('user');
     const id = Number(c.req.param('id'));
     const target = Number.isInteger(id) ? db.getUserById(id) : null;
@@ -472,17 +574,24 @@ adminRoutes.patch('/api/users/:id', requireAdmin, async (c) => {
     }
 
     const body = await readJson(c);
+    const isSelf = target.id === current.id;
 
-    if (target.id === current.id && body.disabled === true) {
+    if (!isSelf && !canManageUser(current, target)) {
+        return c.json({ error: true, message: '不能管理这个账户' }, 403);
+    }
+    if (body.role !== undefined && !canAssignRole(current.role, body.role)) {
+        return c.json({ error: true, message: '不能把账户改成这个身份组' }, 403);
+    }
+    if (isSelf && body.role && body.role !== target.role) {
+        return c.json({ error: true, message: '不能修改自己的身份组' }, 400);
+    }
+    if (isSelf && body.disabled === true) {
         return c.json({ error: true, message: '不能禁用当前登录的账户' }, 400);
     }
-    if (target.id === current.id && body.role && body.role !== 'admin') {
-        return c.json({ error: true, message: '不能取消自己的管理员权限' }, 400);
-    }
-
-    const demoting = target.role === 'admin' && (body.role === 'user' || body.disabled === true);
-    if (demoting && db.countAdmins() <= 1) {
-        return c.json({ error: true, message: '至少需要保留一个可用的管理员' }, 400);
+    if (target.role === 'owner' && (body.role && body.role !== 'owner' || body.disabled === true)) {
+        if (db.countOwners() <= 1) {
+            return c.json({ error: true, message: '至少需要保留一个可用的站长' }, 400);
+        }
     }
 
     const patch = {};
@@ -490,7 +599,7 @@ adminRoutes.patch('/api/users/:id', requireAdmin, async (c) => {
     if (typeof body.displayName === 'string') {
         patch.displayName = normalizeDisplayName(body.displayName);
     }
-    if (body.role === 'admin' || body.role === 'user') {
+    if (body.role !== undefined) {
         patch.role = body.role;
     }
     if (typeof body.disabled === 'boolean') {
@@ -503,7 +612,7 @@ adminRoutes.patch('/api/users/:id', requireAdmin, async (c) => {
         patch.passwordHash = await hashPassword(body.password);
         db.deleteUserSessions(
             target.id,
-            target.id === current.id ? hashToken(getSessionToken(c)) : null
+            isSelf ? hashToken(getSessionToken(c)) : null
         );
     }
 
@@ -516,7 +625,7 @@ adminRoutes.patch('/api/users/:id', requireAdmin, async (c) => {
     return c.json(userPayload(user, current, db.countImagesByOwner()));
 });
 
-adminRoutes.delete('/api/users/:id', requireAdmin, async (c) => {
+adminRoutes.delete('/api/users/:id', requireRoles('owner', 'admin'), async (c) => {
     const current = c.get('user');
     const id = Number(c.req.param('id'));
     const target = Number.isInteger(id) ? db.getUserById(id) : null;
@@ -527,8 +636,11 @@ adminRoutes.delete('/api/users/:id', requireAdmin, async (c) => {
     if (target.id === current.id) {
         return c.json({ error: true, message: '不能删除当前登录的账户' }, 400);
     }
-    if (target.role === 'admin' && db.countAdmins() <= 1) {
-        return c.json({ error: true, message: '至少需要保留一个可用的管理员' }, 400);
+    if (!canManageUser(current, target)) {
+        return c.json({ error: true, message: '不能删除这个账户' }, 403);
+    }
+    if (target.role === 'owner' && db.countOwners() <= 1) {
+        return c.json({ error: true, message: '至少需要保留一个可用的站长' }, 400);
     }
 
     db.deleteUser(target.id);

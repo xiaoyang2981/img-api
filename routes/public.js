@@ -4,6 +4,7 @@ import { IMAGE_DIR, WEBP_DIR, getConfig } from '../config.js';
 import { getAuthUser } from '../lib/auth.js';
 import { MIME } from '../lib/image.js';
 import * as index from '../lib/index.js';
+import { canViewImage } from '../lib/roles.js';
 
 const CACHE_CONTROL = 'public, max-age=31536000, immutable';
 
@@ -24,7 +25,7 @@ export const basePath = (c) => {
 export const decorate = (c, image) => {
     const origin = new URL(c.req.url).origin;
     const prefix = basePath(c);
-    const { ownerId, ...rest } = image;
+    const { ownerId, reviewedBy, reviewedAt, reviewNote, ...rest } = image;
 
     return {
         ...rest,
@@ -37,6 +38,22 @@ const serve = async (c, dir, name, mime) => {
     // 文件名只能是「十六进制 id.扩展名」，同时挡掉路径穿越
     if (!/^[a-z0-9]+\.[a-z0-9]+$/i.test(name)) {
         return c.text('Not Found', 404);
+    }
+
+    const image = index.findByFile(name);
+    if (!image) {
+        return c.text('Not Found', 404);
+    }
+
+    let cacheControl = CACHE_CONTROL;
+
+    // 未通过审核的图片只允许审核员/管理员/站长或上传者本人查看
+    if (image.status !== 'approved') {
+        const user = getAuthUser(c);
+        if (!canViewImage(user, image)) {
+            return c.text('Not Found', 404);
+        }
+        cacheControl = 'private, no-store';
     }
 
     const filePath = join(dir, name);
@@ -55,7 +72,7 @@ const serve = async (c, dir, name, mime) => {
             headers: {
                 'Content-Type': mime,
                 'Content-Length': String(body.length),
-                'Cache-Control': CACHE_CONTROL
+                'Cache-Control': cacheControl
             }
         });
     } catch {
@@ -66,7 +83,7 @@ const serve = async (c, dir, name, mime) => {
 // GET /random?tag=&rating=&type=origin|webp&format=json
 export const randomHandler = async (c) => {
     const config = getConfig();
-    let pool = index.getAll();
+    let pool = index.getApproved();
 
     // 默认不启用标签，这时 tag 参数会被忽略，纯随机
     if (config.enableTags) {
@@ -138,7 +155,7 @@ export const listHandler = async (c) => {
     const tag = (c.req.query('tag') || '').trim().toLowerCase();
     const rating = (c.req.query('rating') || '').trim().toLowerCase();
 
-    let pool = [...index.getAll()];
+    let pool = [...index.getApproved()];
 
     if (tag) {
         pool = pool.filter((image) => (image.tags || []).includes(tag));
@@ -174,6 +191,14 @@ export const infoHandler = (c) => {
     if (!image) {
         return c.json({ error: true, message: '图片不存在' }, 404);
     }
+
+    if (image.status !== 'approved') {
+        const user = getAuthUser(c);
+        if (!canViewImage(user, image)) {
+            return c.json({ error: true, message: '图片不存在' }, 404);
+        }
+    }
+
     return c.json(decorate(c, image));
 };
 

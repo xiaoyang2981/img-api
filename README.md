@@ -15,11 +15,11 @@ npm install    # 只用于安装依赖
 node server.js # 启动服务
 ```
 
-首次启动后打开 `http://localhost:2618/admin`，会进入**初始化管理员**页面：
+首次启动后打开 `http://localhost:2618/admin`，会进入**初始化站长**页面：
 
 1. 填写用户名和密码（至少 8 位）
-2. 创建后自动登录
-3. 之后可以在后台「账户」页添加成员，或让成员在前台自行注册
+2. 创建后自动登录，这个账户的身份组是**站长**
+3. 之后可以在后台「账户」页添加管理员、审核员或成员，或让成员在前台自行注册
 
 公开首页是 `http://localhost:2618/`：左侧是介绍和登录/注册入口，右侧会随机调用图库图片，点「换一张」或刷新页面就会换图。
 
@@ -41,14 +41,26 @@ $env:PORT=3000; node server.js
 
 | 角色 | 权限 |
 |---|---|
-| 管理员 | 账户管理、全局设置、扫描目录、管理所有图片 |
-| 成员 | 上传图片、查看共享图库、编辑/删除自己上传的图片 |
+| **站长** | 最高权限：全部设置（包括端口）、账户管理、审核、图片管理、扫描目录 |
+| **管理员** | 审核、图片管理、账户管理（只能管理审核员和成员）、普通设置；**不能修改端口** |
+| **审核员** | 只能访问审核台和前台，不能上传、不能进入后台其他页面 |
+| **成员** | 登录后上传图片、查看共享图库、编辑/删除自己上传的图片 |
 
-- 默认允许公开注册（注册账户固定为成员），管理员可在设置里关闭
-- 图库是共享的：所有登录用户都能浏览
-- 修改/删除图片时，服务端会校验“上传者本人或管理员”
+- 第一个账户自动成为站长；公开注册的账户固定为成员
+- 站长可以创建管理员/审核员/成员；管理员只能创建审核员/成员
+- 管理员不能修改/禁用/删除管理员或站长账户
+- 图库是共享的，但**只有审核通过的图片才会进入图库**
 - 登录状态使用 HttpOnly + SameSite=Lax 的会话 Cookie，默认 30 天
 - 连续登录失败 10 次会锁定 15 分钟（按 IP + 用户名）
+
+### 审核流程
+
+1. 成员/管理员/站长上传图片，或管理员扫描目录，图片状态为 `pending`（待审核）
+2. 审核员/管理员/站长在 `/admin/review` 审核
+3. 「通过」后状态变为 `approved`，才会出现在 `/random`、`/list`、`/stats` 和前台
+4. 「拒绝」后状态为 `rejected`，不进入图库，但上传者仍能在后台上看到
+5. 未审核/被拒绝的图片，匿名访问 `/i`、`/w` 会返回 404；上传者、审核员、管理员、站长可以预览
+6. 从 0.1.0 迁移过来的旧图片默认视为 `approved`
 
 ## 前台
 
@@ -80,7 +92,7 @@ $env:PORT=3000; node server.js
 
 | 接口 | 说明 |
 |---|---|
-| `POST /admin/api/auth/setup` | 首次初始化管理员，仅在账户表为空时可用 |
+| `POST /admin/api/auth/setup` | 首次初始化站长，仅在账户表为空时可用 |
 | `GET /admin/api/auth/status` | 登录状态、是否已初始化、是否允许注册 |
 | `POST /admin/api/auth/register` | 公开注册（需开启允许注册，注册账户固定为成员） |
 | `POST /admin/api/auth/login` | 用户名 + 密码登录，返回会话令牌 |
@@ -92,19 +104,26 @@ $env:PORT=3000; node server.js
 
 | 接口 | 说明 |
 |---|---|
-| `POST /admin/api/upload` | multipart，字段 `file`（可重复）、`tags`、`rating`、`title`、`source` |
-| `GET /admin/api/images` | 后台列表（共享图库，带 `canEdit`） |
-| `PATCH /admin/api/images/{id}` | 改标签 / 评级 / 标题 / 来源（本人或管理员） |
-| `DELETE /admin/api/images/{id}` | 删除原图 + webp（本人或管理员） |
-| `POST /admin/api/scan` | 扫描 `data/images/`（仅管理员） |
-| `GET/PUT /admin/api/settings` | 读取设置 / 保存设置（保存仅管理员） |
-| `GET /admin/api/stats` | 统计（需要登录） |
+| `POST /admin/api/upload` | multipart，字段 `file`（可重复）、`tags`、`rating`、`title`、`source`；上传后为待审核 |
+| `GET /admin/api/images` | 后台列表，支持 `status=pending/approved/rejected`；成员只能看自己的图 |
+| `PATCH /admin/api/images/{id}` | 改标签 / 评级 / 标题 / 来源（本人、管理员或站长） |
+| `DELETE /admin/api/images/{id}` | 删除原图 + webp（本人、管理员或站长） |
+| `POST /admin/api/scan` | 扫描 `data/images/`（站长/管理员），新增图片为待审核 |
+| `GET/PUT /admin/api/settings` | 读取设置 / 保存设置（站长/管理员；端口仅站长） |
+| `GET /admin/api/stats` | 统计（站长/管理员/成员） |
 
-账户管理（仅管理员）：
+审核接口（站长 / 管理员 / 审核员）：
 
 | 接口 | 说明 |
 |---|---|
-| `GET /admin/api/users` | 账户列表（含图片数量） |
+| `GET /admin/api/review?status=pending&page=1` | 审核列表，`status` 可为 `pending` / `approved` / `rejected` |
+| `PATCH /admin/api/review/{id}` | 审核图片：`{ "status": "approved" \| "rejected" \| "pending", "note": "可选备注" }` |
+
+账户管理（站长 / 管理员）：
+
+| 接口 | 说明 |
+|---|---|
+| `GET /admin/api/users` | 账户列表（含图片数量、可分配身份组） |
 | `POST /admin/api/users` | 创建账户：`username`、`password`、`role`、`displayName` |
 | `PATCH /admin/api/users/{id}` | 改角色 / 显示名 / 禁用 / 重置密码 |
 | `DELETE /admin/api/users/{id}` | 删除账户（图片保留，变为无归属） |
@@ -150,7 +169,7 @@ curl -X POST http://localhost:2618/admin/api/upload \
 | `allowPublicList` | `false` | `/list` 是否需要登录 |
 | `allowRegistration` | `true` | 是否允许前台公开注册；关闭后注册按钮隐藏，接口返回 403 |
 | `maxUploadMB` | `20` | 单张上限 |
-| `port` | `2618` | 端口（`PORT` 环境变量优先） |
+| `port` | `2618` | 端口（`PORT` 环境变量优先；仅站长可修改） |
 
 标签功能默认关闭；需要按标签筛选时再到设置里打开。
 
@@ -180,7 +199,9 @@ IMG_API_DATA_DIR=/srv/img-api-data node server.js
 
 - 旧版 `data/index.json` 会在首次启动时自动导入 SQLite，成功后改名为 `index.json.migrated`
 - 旧版 `data/config.json` 里的设置会自动迁移；`adminToken` 不再使用，会被忽略
-- 首次打开 `/admin` 创建管理员，迁移过来的无归属图片会自动归到第一任管理员
+- 旧用户自动迁移：首个管理员升级为**站长**，其他管理员保留管理员，旧 `user` 变为成员
+- 旧图片自动标记为已通过，升级后不会突然从图库消失
+- 首次打开 `/admin` 创建站长，迁移过来的无归属图片会自动归到第一任站长
 - 旧版“管理令牌”失效，请改用用户名 + 密码登录
 
 ## 部署到服务器

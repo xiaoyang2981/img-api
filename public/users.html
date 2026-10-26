@@ -52,7 +52,10 @@
     .user .name b { font-size: .94rem; }
     .user .sub { color: var(--muted); font-size: .77rem; margin-top: 5px; }
     .badge { font-size: .68rem; padding: 2px 8px; border-radius: 99px; border: 1px solid var(--border); color: var(--muted); }
+    .badge.owner { color: #ffd75e; border-color: rgba(241,196,15,.45); background: rgba(241,196,15,.1); }
     .badge.admin { color: #7ec8ff; border-color: rgba(80,183,254,.4); background: rgba(80,183,254,.1); }
+    .badge.moderator { color: #c8b4ff; border-color: rgba(124,108,255,.45); background: rgba(124,108,255,.1); }
+    .badge.member { color: #9fe7c0; border-color: rgba(46,204,113,.35); background: rgba(46,204,113,.08); }
     .badge.self { color: #6ee7a4; border-color: rgba(46,204,113,.4); background: rgba(46,204,113,.1); }
     .badge.off { color: #ff9b90; border-color: rgba(231,76,60,.4); background: rgba(231,76,60,.1); }
     .user .actions { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
@@ -84,13 +87,10 @@
             <input id="newUsername" type="text" placeholder="用户名（3–32 位）" autocomplete="off" required>
             <input id="newDisplay" type="text" placeholder="显示名（可选）" autocomplete="off">
             <input id="newPassword" type="password" placeholder="密码（至少 8 位）" autocomplete="new-password" required>
-            <select id="newRole">
-                <option value="user">成员</option>
-                <option value="admin">管理员</option>
-            </select>
+            <select id="newRole"></select>
             <button type="submit">创建</button>
         </form>
-        <p class="hint">成员可以上传、查看图库，并管理自己上传的图片；管理员还能管理账户和全局设置。不开放自助注册。</p>
+        <p class="hint">站长可创建管理员、审核员和成员；管理员可创建审核员和成员。审核员只能访问审核台和前台，成员登录后可上传图片。</p>
     </div>
 
     <div class="panel">
@@ -111,7 +111,11 @@
 
     let currentUser = null;
     let users = [];
+    let assignableRoles = [];
     let toastTimer = null;
+
+    const ROLE_LABELS = { owner: '站长', admin: '管理员', moderator: '审核员', member: '成员' };
+    const labelOf = (role) => ROLE_LABELS[role] || role;
 
     const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (ch) => ({
         '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
@@ -150,6 +154,16 @@
         return Number.isNaN(date.getTime()) ? '-' : date.toLocaleString('zh-CN', { hour12: false });
     };
 
+    const renderCreateRoles = () => {
+        const select = $('newRole');
+        const previous = select.value;
+        select.innerHTML = assignableRoles
+            .map((role) => '<option value="' + role + '">' + labelOf(role) + '</option>')
+            .join('');
+        select.value = assignableRoles.includes(previous) ? previous : (assignableRoles[0] || '');
+        $('createForm').querySelector('button[type=submit]').disabled = assignableRoles.length === 0;
+    };
+
     const render = () => {
         if (!users.length) {
             $('users').innerHTML = '<div class="empty">还没有账户</div>';
@@ -157,28 +171,33 @@
         }
 
         $('users').innerHTML = users.map((user) => {
+            const role = user.role;
+            const manageable = user.canManage && !user.isSelf;
             const badges = [
-                '<span class="badge ' + (user.role === 'admin' ? 'admin' : '') + '">' +
-                    (user.role === 'admin' ? '管理员' : '成员') + '</span>',
+                '<span class="badge ' + role + '">' + esc(user.roleLabel || labelOf(role)) + '</span>',
                 user.disabled ? '<span class="badge off">已禁用</span>' : '',
                 user.isSelf ? '<span class="badge self">当前账户</span>' : ''
             ].join('');
 
-            const roleSelect = user.isSelf
-                ? ''
-                : '<select data-role="' + user.id + '">' +
-                    '<option value="user"' + (user.role === 'user' ? ' selected' : '') + '>成员</option>' +
-                    '<option value="admin"' + (user.role === 'admin' ? ' selected' : '') + '>管理员</option>' +
-                  '</select>';
+            const roleOptions = assignableRoles
+                .map((item) => '<option value="' + item + '"' + (role === item ? ' selected' : '') + '>' + labelOf(item) + '</option>')
+                .join('');
+            const roleSelect = manageable
+                ? '<select data-role="' + user.id + '">' + roleOptions + '</select>'
+                : '';
 
-            const toggle = user.isSelf
-                ? ''
-                : '<button class="ghost mini" data-toggle="' + user.id + '">' +
-                    (user.disabled ? '启用' : '禁用') + '</button>';
+            const toggle = manageable
+                ? '<button class="ghost mini" data-toggle="' + user.id + '">' +
+                    (user.disabled ? '启用' : '禁用') + '</button>'
+                : '';
 
-            const remove = user.isSelf
-                ? ''
-                : '<button class="danger mini" data-delete="' + user.id + '">删除</button>';
+            const remove = manageable
+                ? '<button class="danger mini" data-delete="' + user.id + '">删除</button>'
+                : '';
+
+            const reset = (manageable || user.isSelf)
+                ? '<button class="ghost mini" data-reset="' + user.id + '">重置密码</button>'
+                : '';
 
             return '<div class="user">' +
                 '<div>' +
@@ -190,7 +209,7 @@
                 '</div>' +
                 '<div class="actions">' +
                     roleSelect +
-                    '<button class="ghost mini" data-reset="' + user.id + '">重置密码</button>' +
+                    reset +
                     toggle +
                     remove +
                 '</div>' +
@@ -201,6 +220,8 @@
     const load = async () => {
         try {
             const data = await request('/users');
+            assignableRoles = Array.isArray(data.assignableRoles) ? data.assignableRoles : [];
+            renderCreateRoles();
             users = data.users;
             render();
         } catch (error) {
@@ -224,7 +245,7 @@
             $('newUsername').value = '';
             $('newDisplay').value = '';
             $('newPassword').value = '';
-            $('newRole').value = 'user';
+            $('newRole').value = assignableRoles[0] || '';
             toast('账户已创建');
             await load();
         } catch (error) {
@@ -295,7 +316,8 @@
         try {
             const me = await request('/auth/me');
             currentUser = me.user;
-            $('whoami').innerHTML = '<b>' + esc(currentUser.displayName || currentUser.username) + '</b>';
+            $('whoami').innerHTML = '<b>' + esc(currentUser.displayName || currentUser.username) + '</b> · ' +
+                esc(labelOf(currentUser.role));
             await load();
         } catch (error) {
             toast(error.message, true);

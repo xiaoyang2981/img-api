@@ -196,9 +196,9 @@
         const isRegister = mode === 'register';
         const needsConfirm = isSetup || isRegister;
 
-        $('title').textContent = isSetup ? '初始化管理员' : (isRegister ? '注册账户' : '登录图床');
+        $('title').textContent = isSetup ? '初始化站长' : (isRegister ? '注册账户' : '登录图床');
         $('subtitle').textContent = isSetup
-            ? '第一次使用，先创建管理员账户。'
+            ? '第一次使用，先创建站长账户。'
             : (isRegister
                 ? '注册后即可上传图片、管理自己的作品。'
                 : '使用你的账户登录，管理图床和图片。');
@@ -208,7 +208,7 @@
         $('confirmField').classList.toggle('hidden', !needsConfirm);
         $('confirm').required = needsConfirm;
         $('password').autocomplete = needsConfirm ? 'new-password' : 'current-password';
-        $('submitBtn').textContent = isSetup ? '创建管理员并进入' : (isRegister ? '注册并登录' : '登录');
+        $('submitBtn').textContent = isSetup ? '创建站长并进入' : (isRegister ? '注册并登录' : '登录');
 
         $('form').hidden = false;
 
@@ -219,7 +219,7 @@
         } else if (!isSetup) {
             setSwitch(allowRegistration
                 ? '还没有账户？<a href="' + BASE + '/register">注册一个</a>'
-                : '注册暂未开放，请联系管理员创建账户');
+                : '注册暂未开放，请联系站长或管理员创建账户');
         } else {
             setSwitch('');
         }
@@ -272,8 +272,14 @@
         $('submitBtn').disabled = true;
 
         try {
-            await request(endpoint, { method: 'POST', json: payload });
-            location.href = redirectTarget();
+            const result = await request(endpoint, { method: 'POST', json: payload });
+            const next = new URLSearchParams(location.search).get('next');
+
+            if (result.user?.role === 'moderator' && !next) {
+                location.href = BASE + '/admin/review';
+            } else {
+                location.href = redirectTarget();
+            }
         } catch (error) {
             showError(error.message);
             busy = false;
@@ -296,7 +302,7 @@
                 if (isRegisterPath) {
                     applyUnavailable(
                         '系统尚未初始化',
-                        '还没有管理员账户，请先到后台创建管理员。',
+                        '还没有站长账户，请先到后台创建站长。',
                         '<a href="' + BASE + '/admin">前往初始化</a>'
                     );
                     return;
@@ -309,7 +315,7 @@
                 if (!allowRegistration) {
                     applyUnavailable(
                         '注册暂未开放',
-                        '管理员关闭了公开注册，请联系管理员创建账户。',
+                        '站长或管理员关闭了公开注册，请联系站长或管理员创建账户。',
                         '<a href="' + BASE + '/login">去登录</a>'
                     );
                     return;

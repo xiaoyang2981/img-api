@@ -101,7 +101,7 @@ const start = async () => {
         console.log(`🎲 随机图接口: http://localhost:${port}/random`);
         console.log(`🔧 管理后台:   http://localhost:${port}/admin`);
         console.log('');
-        console.log('🔐 账户系统: 用户名 + 密码（首次打开后台创建管理员）');
+        console.log('🔐 账户系统: 用户名 + 密码（首次打开后台创建站长）');
         console.log(`   （账户、会话、图片索引和设置都保存在 ${DB_FILE}）`);
         console.log('');
         console.log(`📦 图库数量: ${images.length} 张 | 标签功能: ${config.enableTags ? '已启用' : '未启用'}`);

@@ -154,7 +154,7 @@
         <div class="item">
             <div class="text">
                 <b>端口</b>
-                <span>保存在配置里，修改后重启生效；环境变量 <code>PORT</code> 优先级更高（当前进程使用 <code id="activePort">-</code>）。</span>
+                <span>保存在配置里，修改后重启生效；环境变量 <code>PORT</code> 优先级更高（当前进程使用 <code id="activePort">-</code>）。<b id="portRestricted" hidden style="color:#ffb86b;">仅站长可修改。</b></span>
             </div>
             <input type="number" id="port" min="1" max="65535">
         </div>
@@ -233,6 +233,8 @@
         $('allowRegistration').checked = data.allowRegistration;
         $('maxUploadMB').value = data.maxUploadMB;
         $('port').value = data.port;
+        $('port').disabled = data.canEditPort === false;
+        $('portRestricted').hidden = data.canEditPort !== false;
         $('activePort').textContent = location.port || '80';
         $('randomExample').textContent = location.origin + BASE + '/random?format=json';
         document.title = (data.siteName || '梦星的小图床') + ' · 设置';
