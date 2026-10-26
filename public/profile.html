@@ -27,13 +27,7 @@
     .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 20px; margin-bottom: 18px; }
     h2 { font-size: .98rem; }
     .identity-panel { padding: 18px 20px; }
-    .identity { display: flex; align-items: center; gap: 15px; min-width: 0; }
-    .avatar {
-        width: 58px; height: 58px; flex: none; display: grid; place-items: center;
-        border-radius: 17px; border: 1px solid rgba(80,183,254,.35);
-        background: linear-gradient(135deg, rgba(80,183,254,.32), rgba(124,108,255,.22));
-        color: #fff; font-size: 1.4rem; font-weight: 700;
-    }
+    .identity { display: flex; align-items: center; min-width: 0; }
     .identity-copy { min-width: 0; }
     .identity-name { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
     .identity-name b { font-size: 1.05rem; }
@@ -87,8 +81,6 @@
         body { padding: 14px; }
         .panel { padding: 16px; }
         .identity-panel { padding: 16px; }
-        .identity { align-items: flex-start; }
-        .avatar { width: 50px; height: 50px; border-radius: 14px; font-size: 1.2rem; }
         .code-row { flex-direction: column; }
         .code-row button { width: 100%; }
         .row button { width: 100%; }
@@ -113,7 +105,6 @@
 
     <section class="panel identity-panel">
         <div class="identity">
-            <div class="avatar" id="avatar">?</div>
             <div class="identity-copy">
                 <div class="identity-name">
                     <b id="displayNameText">…</b>
@@ -254,12 +245,6 @@
         return Number.isNaN(date.getTime()) ? '-' : date.toLocaleString('zh-CN', { hour12: false });
     };
 
-    const initialOf = (value) => {
-        const chars = Array.from(String(value || '?').trim());
-        const first = chars[0] || '?';
-        return /^[a-z]$/i.test(first) ? first.toUpperCase() : first;
-    };
-
     const setDisabled = (ids, disabled) => {
         ids.forEach((id) => { $(id).disabled = disabled; });
     };
@@ -274,7 +259,6 @@
         const hasEmail = Boolean(user.email);
 
         $('whoami').innerHTML = '<b>' + esc(name) + '</b> · ' + esc(roleText);
-        $('avatar').textContent = initialOf(name);
         $('displayNameText').textContent = name;
         $('roleBadge').textContent = roleText;
         $('roleBadge').className = 'badge ' + role;
