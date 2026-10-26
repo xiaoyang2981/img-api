@@ -287,6 +287,7 @@
             <a href="/login" id="loginLink">登录</a>
             <a href="/register" id="registerLink" class="primary">注册</a>
             <a href="/admin" id="adminLink" hidden>进入后台</a>
+            <a href="/admin/profile" id="profileLink" hidden>个人信息</a>
             <button type="button" id="logoutBtn" hidden>退出</button>
             <button type="button" class="theme-toggle" data-theme-toggle>☀️</button>
         </nav>
@@ -345,6 +346,7 @@
     document.getElementById('loginLink').href = BASE + '/login';
     document.getElementById('registerLink').href = BASE + '/register';
     document.getElementById('adminLink').href = BASE + '/admin';
+    document.getElementById('profileLink').href = BASE + '/admin/profile';
     document.getElementById('primaryAction').href = BASE + '/register';
     document.getElementById('secondaryAction').href = BASE + '/login';
 
@@ -434,6 +436,7 @@
         $('loginLink').hidden = false;
         $('registerLink').hidden = !allowRegistration;
         $('adminLink').hidden = true;
+        $('profileLink').hidden = true;
         $('logoutBtn').hidden = true;
 
         $('primaryAction').hidden = false;
@@ -457,6 +460,7 @@
         $('adminLink').hidden = false;
         $('adminLink').href = isModerator ? BASE + '/admin/review' : BASE + '/admin';
         $('adminLink').textContent = isModerator ? '审核台' : '进入后台';
+        $('profileLink').hidden = false;
         $('logoutBtn').hidden = false;
 
         $('primaryAction').hidden = false;

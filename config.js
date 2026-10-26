@@ -10,6 +10,13 @@ const DEFAULT_CONFIG = {
     randomPreferWebp: true,       // /random 默认返回 webp
     allowPublicList: false,       // /list 是否需要登录
     allowRegistration: true,      // 是否允许公开注册（注册的账户固定为成员）
+    enableEmailVerification: false, // 开启后注册必须邮箱验证码，忘记密码通过邮箱重置
+    smtpHost: '',
+    smtpPort: 587,
+    smtpSecure: false,
+    smtpUser: '',
+    smtpPass: '',
+    smtpFrom: '',
     maxUploadMB: 20               // 单张图片大小上限
 };
 
@@ -19,6 +26,13 @@ const coerce = {
     randomPreferWebp: (value) => value === true || value === 'true',
     allowPublicList: (value) => value === true || value === 'true',
     allowRegistration: (value) => value === true || value === 'true',
+    enableEmailVerification: (value) => value === true || value === 'true',
+    smtpHost: (value) => String(value ?? '').trim(),
+    smtpPort: (value) => Math.min(65535, Math.max(1, Number(value) || 587)),
+    smtpSecure: (value) => value === true || value === 'true',
+    smtpUser: (value) => String(value ?? '').trim(),
+    smtpPass: (value) => String(value ?? ''),
+    smtpFrom: (value) => String(value ?? '').trim(),
     maxUploadMB: (value) => Math.min(500, Math.max(1, Number(value) || 20))
 };
 
@@ -93,6 +107,10 @@ export const initConfig = async () => {
 export const updateConfig = async (patch = {}) => {
     for (const key of Object.keys(coerce)) {
         if (key in patch) {
+            // SMTP 密码留空表示保持原值，避免设置页每次保存都清空
+            if (key === 'smtpPass' && !String(patch[key] || '').trim()) {
+                continue;
+            }
             config[key] = coerce[key](patch[key]);
             setSetting(key, String(config[key]));
         }

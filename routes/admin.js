@@ -17,6 +17,10 @@ import {
     setSessionCookie
 } from '../lib/auth.js';
 import { hashPassword, validatePassword, verifyPassword } from '../lib/password.js';
+import { isEmail, normalizeEmail } from '../lib/email.js';
+import { clearCode, issueCode, verifyCode } from '../lib/email-codes.js';
+import { isMailConfigured, sendMail } from '../lib/mailer.js';
+import { passwordResetCodeEmail, profileSecurityCodeEmail, registrationCodeEmail, smtpTestEmail } from '../lib/mail-templates.js';
 import { ROLES, assignableRoles, canAssignRole, canEditImage, canManageUser, canReview, roleLabel } from '../lib/roles.js';
 import * as db from '../lib/db.js';
 import * as index from '../lib/index.js';
@@ -42,6 +46,9 @@ const usernameError = (username) => {
 };
 
 const isUniqueError = (error) => /UNIQUE constraint failed/i.test(error?.message || '');
+const uniqueUserMessage = (error) => /users\.email/i.test(error?.message || '')
+    ? '邮箱已被使用'
+    : '用户名已存在';
 
 const adminBase = (c) => {
     const pathname = new URL(c.req.url).pathname;
@@ -63,6 +70,15 @@ const settingPayload = (user) => {
         randomPreferWebp: config.randomPreferWebp,
         allowPublicList: config.allowPublicList,
         allowRegistration: config.allowRegistration,
+        enableEmailVerification: config.enableEmailVerification,
+        smtpHost: config.smtpHost,
+        smtpPort: config.smtpPort,
+        smtpSecure: config.smtpSecure,
+        smtpUser: config.smtpUser,
+        smtpFrom: config.smtpFrom,
+        smtpPassSet: Boolean(config.smtpPass),
+        emailConfigured: isMailConfigured(config),
+        canEditEmail: user?.role === 'owner',
         maxUploadMB: config.maxUploadMB,
         canEditPort: user?.role === 'owner'
     };
@@ -90,6 +106,186 @@ const userPayload = (user, currentUser, imageCounts) => ({
     canManage: canManageUser(currentUser, user)
 });
 
+// —— 个人信息 ——
+
+const PROFILE_EMAIL_CODE = 'profile-email';
+const PROFILE_EMAIL_BIND_CODE = 'profile-email-bind';
+const PROFILE_PASSWORD_CODE = 'profile-password';
+
+const profilePayload = (user) => {
+    const config = getConfig();
+
+    return {
+        user: {
+            ...publicUser(user),
+            createdAt: user.createdAt,
+            updatedAt: user.updatedAt
+        },
+        siteName: config.siteName,
+        mailConfigured: isMailConfigured(config)
+    };
+};
+
+const profileEmailTarget = (user, value) => {
+    const email = normalizeEmail(value);
+
+    if (!isEmail(email)) {
+        return { error: '邮箱格式不正确', status: 400 };
+    }
+    if (email === normalizeEmail(user.email)) {
+        return { error: '新邮箱与当前邮箱相同', status: 400 };
+    }
+
+    const existing = db.getUserByEmail(email);
+    if (existing && existing.id !== user.id) {
+        return { error: '邮箱已被使用', status: 409 };
+    }
+
+    return { email };
+};
+
+const sendProfileEmailCode = async (c) => {
+    const user = c.get('user');
+    const config = getConfig();
+    const body = await readJson(c);
+    const target = profileEmailTarget(user, body.newEmail);
+
+    if (target.error) {
+        return c.json({ error: true, message: target.error }, target.status);
+    }
+    if (!isMailConfigured(config)) {
+        return c.json({ error: true, message: '邮件服务尚未配置，无法发送验证码' }, 503);
+    }
+
+    const purpose = user.email ? PROFILE_EMAIL_CODE : PROFILE_EMAIL_BIND_CODE;
+    const to = user.email || target.email;
+    let code;
+
+    try {
+        code = issueCode(purpose, to);
+    } catch (error) {
+        return c.json({ error: true, message: error.message }, 429);
+    }
+
+    try {
+        await sendMail({
+            to,
+            ...profileSecurityCodeEmail({
+                siteName: config.siteName,
+                username: user.username,
+                action: user.email ? 'email-change' : 'email-bind',
+                newEmail: target.email,
+                code
+            })
+        });
+    } catch (error) {
+        clearCode(purpose, to);
+        console.error('个人信息邮箱验证码发送失败:', error.message);
+        return c.json({ error: true, message: '验证码邮件发送失败，请稍后再试' }, 502);
+    }
+
+    return c.json({ ok: true, to, mode: user.email ? 'change' : 'bind' });
+};
+
+const updateProfileEmail = async (c) => {
+    const user = c.get('user');
+    const body = await readJson(c);
+    const target = profileEmailTarget(user, body.newEmail);
+
+    if (target.error) {
+        return c.json({ error: true, message: target.error }, target.status);
+    }
+
+    const purpose = user.email ? PROFILE_EMAIL_CODE : PROFILE_EMAIL_BIND_CODE;
+    const codeTarget = user.email || target.email;
+
+    if (!verifyCode(purpose, codeTarget, body.code)) {
+        return c.json({ error: true, message: '验证码无效或已过期' }, 400);
+    }
+
+    let updated;
+
+    try {
+        updated = await db.updateUser(user.id, { email: target.email });
+    } catch (error) {
+        if (isUniqueError(error)) {
+            return c.json({ error: true, message: '邮箱已被使用' }, 409);
+        }
+        throw error;
+    }
+
+    db.deleteUserSessions(user.id, hashToken(getSessionToken(c)));
+
+    return c.json(profilePayload(updated));
+};
+
+const sendProfilePasswordCode = async (c) => {
+    const user = c.get('user');
+    const config = getConfig();
+    const body = await readJson(c);
+
+    if (!user.email) {
+        return c.json({ error: true, message: '请先绑定邮箱后再修改密码' }, 400);
+    }
+    if (!isMailConfigured(config)) {
+        return c.json({ error: true, message: '邮件服务尚未配置，无法发送验证码' }, 503);
+    }
+    if (!await verifyPassword(String(body.currentPassword || ''), user.passwordHash)) {
+        return c.json({ error: true, message: '当前密码不正确' }, 400);
+    }
+
+    let code;
+
+    try {
+        code = issueCode(PROFILE_PASSWORD_CODE, user.email);
+    } catch (error) {
+        return c.json({ error: true, message: error.message }, 429);
+    }
+
+    try {
+        await sendMail({
+            to: user.email,
+            ...profileSecurityCodeEmail({
+                siteName: config.siteName,
+                username: user.username,
+                action: 'password-change',
+                code
+            })
+        });
+    } catch (error) {
+        clearCode(PROFILE_PASSWORD_CODE, user.email);
+        console.error('个人信息密码验证码发送失败:', error.message);
+        return c.json({ error: true, message: '验证码邮件发送失败，请稍后再试' }, 502);
+    }
+
+    return c.json({ ok: true, to: user.email });
+};
+
+const updateProfilePassword = async (c) => {
+    const user = c.get('user');
+    const body = await readJson(c);
+    const currentPassword = String(body.currentPassword || '');
+    const newPassword = String(body.newPassword || '');
+
+    if (!user.email) {
+        return c.json({ error: true, message: '请先绑定邮箱后再修改密码' }, 400);
+    }
+    if (!await verifyPassword(currentPassword, user.passwordHash)) {
+        return c.json({ error: true, message: '当前密码不正确' }, 400);
+    }
+    if (!validatePassword(newPassword)) {
+        return c.json({ error: true, message: '新密码至少 8 位' }, 400);
+    }
+    if (!verifyCode(PROFILE_PASSWORD_CODE, user.email, body.code)) {
+        return c.json({ error: true, message: '验证码无效或已过期' }, 400);
+    }
+
+    await db.updateUser(user.id, { passwordHash: await hashPassword(newPassword) });
+    db.deleteUserSessions(user.id, hashToken(getSessionToken(c)));
+
+    return c.json({ ok: true });
+};
+
 // —— 页面 ——
 
 adminRoutes.get('/', (c) => {
@@ -115,6 +311,12 @@ adminRoutes.get('/setting', (c) => {
     return servePage(c, 'setting.html');
 });
 
+adminRoutes.get('/profile', (c) => {
+    const user = getAuthUser(c);
+    if (!user) return redirectToLogin(c);
+    return servePage(c, 'profile.html');
+});
+
 adminRoutes.get('/users', (c) => {
     const user = getAuthUser(c);
     if (!user) return redirectToLogin(c);
@@ -133,11 +335,15 @@ adminRoutes.get('/review', (c) => {
 
 adminRoutes.get('/api/auth/status', (c) => {
     const user = getAuthUser(c);
+    const config = getConfig();
+
     return c.json({
         setup: db.countUsers() === 0,
         authenticated: Boolean(user),
-        allowRegistration: getConfig().allowRegistration,
-        siteName: getConfig().siteName,
+        allowRegistration: config.allowRegistration,
+        enableEmailVerification: config.enableEmailVerification,
+        emailConfigured: isMailConfigured(config),
+        siteName: config.siteName,
         user: publicUser(user)
     });
 });
@@ -214,8 +420,125 @@ adminRoutes.post('/api/auth/login', async (c) => {
     return c.json({ user: publicUser(user), token: session.token, expiresAt: session.expiresAt });
 });
 
+adminRoutes.post('/api/auth/register-code', async (c) => {
+    const config = getConfig();
+
+    if (!config.allowRegistration) {
+        return c.json({ error: true, message: '注册暂未开放' }, 403);
+    }
+    if (!config.enableEmailVerification) {
+        return c.json({ error: true, message: '邮箱验证未开启' }, 403);
+    }
+    if (!isMailConfigured(config)) {
+        return c.json({ error: true, message: '邮件服务尚未配置，请联系站长' }, 503);
+    }
+
+    const body = await readJson(c);
+    const email = normalizeEmail(body.email);
+
+    if (!isEmail(email)) {
+        return c.json({ error: true, message: '邮箱格式不正确' }, 400);
+    }
+    if (db.getUserByEmail(email)) {
+        return c.json({ error: true, message: '这个邮箱已经被使用' }, 409);
+    }
+
+    let code;
+
+    try {
+        code = issueCode('register', email);
+    } catch (error) {
+        return c.json({ error: true, message: error.message }, 429);
+    }
+
+    try {
+        await sendMail({
+            to: email,
+            ...registrationCodeEmail({ siteName: config.siteName, code })
+        });
+    } catch (error) {
+        clearCode('register', email);
+        console.error('注册验证码发送失败:', error.message);
+        return c.json({ error: true, message: '验证码邮件发送失败，请稍后再试' }, 502);
+    }
+
+    return c.json({ ok: true });
+});
+
+adminRoutes.post('/api/auth/forgot-password', async (c) => {
+    const config = getConfig();
+
+    if (!config.enableEmailVerification) {
+        return c.json({ error: true, message: '邮箱验证未开启' }, 403);
+    }
+    if (!isMailConfigured(config)) {
+        return c.json({ error: true, message: '邮件服务尚未配置，请联系站长' }, 503);
+    }
+
+    const body = await readJson(c);
+    const identifier = String(body.identifier || '').trim();
+    const user = db.getUserByUsername(identifier) || db.getUserByEmail(identifier);
+
+    if (user?.email) {
+        let code;
+
+        try {
+            code = issueCode('reset', user.email);
+        } catch (error) {
+            return c.json({ error: true, message: error.message }, 429);
+        }
+
+        try {
+            await sendMail({
+                to: user.email,
+                ...passwordResetCodeEmail({ siteName: config.siteName, username: user.username, code })
+            });
+        } catch (error) {
+            clearCode('reset', user.email);
+            console.error('重置密码邮件发送失败:', error.message);
+            return c.json({ error: true, message: '邮件发送失败，请稍后再试' }, 502);
+        }
+    }
+
+    // 不暴露账户是否存在
+    return c.json({ ok: true });
+});
+
+adminRoutes.post('/api/auth/reset-password', async (c) => {
+    const config = getConfig();
+
+    if (!config.enableEmailVerification) {
+        return c.json({ error: true, message: '邮箱验证未开启' }, 403);
+    }
+    if (!isMailConfigured(config)) {
+        return c.json({ error: true, message: '邮件服务尚未配置，请联系站长' }, 503);
+    }
+
+    const body = await readJson(c);
+    const identifier = String(body.identifier || '').trim();
+    const newPassword = String(body.newPassword || '');
+    const user = db.getUserByUsername(identifier) || db.getUserByEmail(identifier);
+
+    if (!user || !user.email) {
+        return c.json({ error: true, message: '验证码无效或已过期' }, 400);
+    }
+    if (!validatePassword(newPassword)) {
+        return c.json({ error: true, message: '新密码至少 8 位' }, 400);
+    }
+    if (!verifyCode('reset', user.email, body.code)) {
+        return c.json({ error: true, message: '验证码无效或已过期' }, 400);
+    }
+
+    await db.updateUser(user.id, { passwordHash: await hashPassword(newPassword) });
+    db.deleteUserSessions(user.id);
+
+    return c.json({ ok: true });
+});
+
 adminRoutes.post('/api/auth/register', async (c) => {
-    if (!getConfig().allowRegistration) {
+    const config = getConfig();
+
+    if (!config.allowRegistration) {
         return c.json({ error: true, message: '注册暂未开放' }, 403);
     }
     if (db.countUsers() === 0) {
@@ -225,11 +548,29 @@ adminRoutes.post('/api/auth/register', async (c) => {
     const body = await readJson(c);
     const username = normalizeUsername(body.username);
     const password = String(body.password || '');
+    let email = null;
 
     const invalidUsername = usernameError(username);
     if (invalidUsername) return c.json({ error: true, message: invalidUsername }, 400);
     if (!validatePassword(password)) {
         return c.json({ error: true, message: '密码至少 8 位' }, 400);
+    }
+
+    if (config.enableEmailVerification) {
+        if (!isMailConfigured(config)) {
+            return c.json({ error: true, message: '邮件服务尚未配置，请联系站长' }, 503);
+        }
+
+        email = normalizeEmail(body.email);
+        if (!isEmail(email)) {
+            return c.json({ error: true, message: '邮箱格式不正确' }, 400);
+        }
+        if (db.getUserByEmail(email)) {
+            return c.json({ error: true, message: '这个邮箱已经被使用' }, 409);
+        }
+        if (!verifyCode('register', email, body.code)) {
+            return c.json({ error: true, message: '邮箱验证码无效或已过期' }, 400);
+        }
     }
 
     let user;
@@ -239,11 +580,12 @@ adminRoutes.post('/api/auth/register', async (c) => {
             username,
             passwordHash: await hashPassword(password),
             role: 'member',
+            email,
             displayName: normalizeDisplayName(body.displayName) || username
         });
     } catch (error) {
         if (isUniqueError(error)) {
-            return c.json({ error: true, message: '用户名已存在' }, 409);
+            return c.json({ error: true, message: uniqueUserMessage(error) }, 409);
         }
         throw error;
     }
@@ -265,36 +607,98 @@ adminRoutes.get('/api/auth/me', requireAuth, (c) =>
     c.json({ user: publicUser(c.get('user')) })
 );
 
-adminRoutes.post('/api/auth/password', requireAuth, async (c) => {
-    const user = c.get('user');
+adminRoutes.get('/api/profile', requireAuth, (c) =>
+    c.json(profilePayload(c.get('user')))
+);
+
+adminRoutes.put('/api/profile', requireAuth, async (c) => {
     const body = await readJson(c);
-    const currentPassword = String(body.currentPassword || '');
-    const newPassword = String(body.newPassword || '');
 
-    if (!await verifyPassword(currentPassword, user.passwordHash)) {
-        return c.json({ error: true, message: '当前密码不正确' }, 400);
-    }
-    if (!validatePassword(newPassword)) {
-        return c.json({ error: true, message: '新密码至少 8 位' }, 400);
+    if (typeof body.displayName !== 'string') {
+        return c.json({ error: true, message: '显示名格式不正确' }, 400);
     }
 
-    await db.updateUser(user.id, { passwordHash: await hashPassword(newPassword) });
-    db.deleteUserSessions(user.id, hashToken(getSessionToken(c)));
+    const user = await db.updateUser(c.get('user').id, {
+        displayName: normalizeDisplayName(body.displayName)
+    });
 
-    return c.json({ ok: true });
+    return c.json(profilePayload(user));
 });
 
+adminRoutes.post('/api/profile/email-code', requireAuth, sendProfileEmailCode);
+adminRoutes.put('/api/profile/email', requireAuth, updateProfileEmail);
+adminRoutes.post('/api/profile/password-code', requireAuth, sendProfilePasswordCode);
+adminRoutes.put('/api/profile/password', requireAuth, updateProfilePassword);
+
+// 兼容旧接口：现在同样需要当前邮箱验证码
+adminRoutes.post('/api/auth/password', requireAuth, updateProfilePassword);
+
 // —— 设置 ——
+
+adminRoutes.post('/api/settings/test-email', requireRoles('owner'), async (c) => {
+    const config = getConfig();
+
+    if (!isMailConfigured(config)) {
+        return c.json({ error: true, message: 'SMTP 尚未配置，请先保存 SMTP 设置' }, 400);
+    }
+
+    const body = await readJson(c);
+    const current = c.get('user');
+    const to = normalizeEmail(body.to)
+        || normalizeEmail(config.smtpUser)
+        || normalizeEmail(current.email);
+
+    if (!isEmail(to)) {
+        return c.json({ error: true, message: '请填写正确的测试收件邮箱' }, 400);
+    }
+
+    try {
+        await sendMail({
+            to,
+            ...smtpTestEmail({
+                siteName: config.siteName,
+                smtpHost: config.smtpHost,
+                smtpPort: config.smtpPort,
+                smtpSecure: config.smtpSecure
+            })
+        });
+    } catch (error) {
+        console.error('测试邮件发送失败:', error.message);
+        return c.json({ error: true, message: '测试邮件发送失败，请检查 SMTP 配置' }, 502);
+    }
+
+    return c.json({ ok: true, to });
+});
 
 adminRoutes.get('/api/settings', requireAuth, (c) => c.json(settingPayload(c.get('user'))));
 
 adminRoutes.put('/api/settings', requireRoles('owner', 'admin'), async (c) => {
     const user = c.get('user');
     const body = await readJson(c);
+    const config = getConfig();
 
-    // 端口属于危险项，只有站长可以修改；管理员提交时直接忽略
+    // 端口和邮件配置属于危险项，只有站长可以修改；管理员提交时直接忽略
     if (user.role !== 'owner') {
         delete body.port;
+        delete body.enableEmailVerification;
+        delete body.smtpHost;
+        delete body.smtpPort;
+        delete body.smtpSecure;
+        delete body.smtpUser;
+        delete body.smtpPass;
+        delete body.smtpFrom;
+    } else if (body.enableEmailVerification === true || body.enableEmailVerification === 'true') {
+        const host = body.smtpHost !== undefined ? String(body.smtpHost || '').trim() : config.smtpHost;
+        const from = (body.smtpFrom !== undefined || body.smtpUser !== undefined)
+            ? String(body.smtpFrom || body.smtpUser || '').trim()
+            : (config.smtpFrom || config.smtpUser);
+
+        if (!host || !from) {
+            return c.json({
+                error: true,
+                message: '开启邮箱验证前，请先填写 SMTP 主机和发件地址'
+            }, 400);
+        }
     }
 
     await updateConfig(body);
@@ -528,6 +932,7 @@ adminRoutes.post('/api/users', requireRoles('owner', 'admin'), async (c) => {
     const username = normalizeUsername(body.username);
     const password = String(body.password || '');
     const role = String(body.role || 'member');
+    const email = normalizeEmail(body.email);
 
     if (!ROLES.includes(role) || !canAssignRole(current.role, role)) {
         return c.json({ error: true, message: '不能创建这个身份组的账户' }, 403);
@@ -538,6 +943,12 @@ adminRoutes.post('/api/users', requireRoles('owner', 'admin'), async (c) => {
     if (!validatePassword(password)) {
         return c.json({ error: true, message: '密码至少 8 位' }, 400);
     }
+    if (email && !isEmail(email)) {
+        return c.json({ error: true, message: '邮箱格式不正确' }, 400);
+    }
+    if (email && db.getUserByEmail(email)) {
+        return c.json({ error: true, message: '邮箱已被使用' }, 409);
+    }
 
     let user;
 
@@ -546,11 +957,12 @@ adminRoutes.post('/api/users', requireRoles('owner', 'admin'), async (c) => {
             username,
             passwordHash: await hashPassword(password),
             role,
+            email: email || null,
             displayName: normalizeDisplayName(body.displayName) || username
         });
     } catch (error) {
         if (isUniqueError(error)) {
-            return c.json({ error: true, message: '用户名已存在' }, 409);
+            return c.json({ error: true, message: uniqueUserMessage(error) }, 409);
         }
         throw error;
     }
@@ -573,6 +985,9 @@ adminRoutes.patch('/api/users/:id', requireRoles('owner', 'admin'), async (c) =>
     if (!isSelf && !canManageUser(current, target)) {
         return c.json({ error: true, message: '不能管理这个账户' }, 403);
     }
+    if (isSelf && (body.email !== undefined || body.password !== undefined)) {
+        return c.json({ error: true, message: '请在个人信息页修改邮箱或密码' }, 400);
+    }
     if (body.role !== undefined && !canAssignRole(current.role, body.role)) {
         return c.json({ error: true, message: '不能把账户改成这个身份组' }, 403);
     }
@@ -592,6 +1007,17 @@ adminRoutes.patch('/api/users/:id', requireRoles('owner', 'admin'), async (c) =>
 
     if (typeof body.displayName === 'string') {
         patch.displayName = normalizeDisplayName(body.displayName);
+    }
+    if (typeof body.email === 'string') {
+        const email = normalizeEmail(body.email);
+        if (email && !isEmail(email)) {
+            return c.json({ error: true, message: '邮箱格式不正确' }, 400);
+        }
+        const existingEmailUser = email ? db.getUserByEmail(email) : null;
+        if (existingEmailUser && existingEmailUser.id !== target.id) {
+            return c.json({ error: true, message: '邮箱已被使用' }, 409);
+        }
+        patch.email = email || null;
     }
     if (body.role !== undefined) {
         patch.role = body.role;

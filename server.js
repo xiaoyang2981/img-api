@@ -45,6 +45,8 @@ app.get('/health', healthHandler);
 // 后台的「设置」链接曾经是相对路径，在 /admin 下会解析成 /setting
 app.get('/setting', (c) => c.redirect(`${basePath(c)}/admin/setting`));
 app.get('/setting/', (c) => c.redirect(`${basePath(c)}/admin/setting`));
+app.get('/profile', (c) => c.redirect(`${basePath(c)}/admin/profile`));
+app.get('/profile/', (c) => c.redirect(`${basePath(c)}/admin/profile`));
 app.get('/admin/', (c) => c.redirect(`${basePath(c)}/admin`));
 
 // 后台子页面使用相对路径请求 /admin/theme.*

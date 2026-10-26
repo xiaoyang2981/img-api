@@ -43,7 +43,7 @@ $env:PORT=3000; node server.js
 |---|---|
 | **站长** | 最高权限：全部设置（包括端口）、账户管理、审核、图片管理、扫描目录 |
 | **管理员** | 审核、图片管理、账户管理（只能管理审核员和成员）、普通设置；**不能修改端口** |
-| **审核员** | 只能访问审核台和前台，不能上传、不能进入后台其他页面 |
+| **审核员** | 只能访问审核台、个人信息页和前台，不能上传、不能进入后台其他页面 |
 | **成员** | 登录后上传图片、查看共享图库、编辑/删除自己上传的图片 |
 
 - 第一个账户自动成为站长；公开注册的账户固定为成员
@@ -52,6 +52,18 @@ $env:PORT=3000; node server.js
 - 图库是共享的，但**只有审核通过的图片才会进入图库**
 - 登录状态使用 HttpOnly + SameSite=Lax 的会话 Cookie，默认 30 天
 - 连续登录失败 10 次会锁定 15 分钟（按 IP + 用户名）
+
+### 个人信息
+
+所有登录用户都可以访问 `/admin/profile`（`/profile` 也会重定向到这里）：
+
+- 修改显示名；用户名作为账户标识不可修改
+- 首次绑定邮箱：验证码发送到新邮箱，验证后完成绑定
+- 修改已绑定邮箱：验证码发送到当前邮箱，确认后才能改成新邮箱
+- 修改密码：需要当前密码 + 当前邮箱验证码；成功后其他设备的登录会失效
+- 未绑定邮箱时不能修改密码，需要先绑定邮箱
+- 邮箱或密码修改需要 SMTP 已配置；未配置时页面会提示并暂时禁用相关操作
+- 站长/管理员在 `/admin/users` 为其他账户重置密码或设置邮箱；自己的邮箱和密码必须在个人信息页修改
 
 ### 审核流程
 
@@ -63,6 +75,22 @@ $env:PORT=3000; node server.js
 6. 从 0.1.0 迁移过来的旧图片默认视为 `approved`
 
 后台选择或拖入图片后不会立即上传，会先弹出确认框，显示待上传缩略图、标签、标题和来源；点「确认上传」后才真正开始上传。
+
+### 邮箱验证
+
+站长可以在 `/admin/setting` 的「邮箱验证」面板开启此功能，并配置 SMTP：
+
+- 开启后，公开注册必须填写邮箱并输入邮箱验证码
+- 开启后，登录页显示「忘记密码？」，通过用户名或邮箱接收验证码重置密码
+- 验证码 10 分钟有效，同一邮箱 60 秒内不能重复发送，最多尝试 5 次
+- 关闭后，注册不需要邮箱，忘记密码功能隐藏
+- 用户自己的邮箱在个人信息页绑定或修改；站长/管理员可在账户页为其他账户设置邮箱
+- SMTP 密码/授权码只保存不明文返回，设置页留空表示不修改
+- SMTP 未配置时不能开启邮箱验证，注册页会提示暂不可用
+- 设置页提供「发送测试邮件」按钮，可先保存 SMTP 配置再验证发信是否成功
+- 注册验证码、密码重置、个人信息安全验证和测试邮件使用统一的品牌化 HTML 模板，并附带纯文本版本
+
+SMTP 配置保存在 SQLite 的 `settings` 表；QQ/163 邮箱通常需要使用「授权码」而不是登录密码。
 
 ## 前台
 
@@ -101,12 +129,21 @@ $env:PORT=3000; node server.js
 | 接口 | 说明 |
 |---|---|
 | `POST /admin/api/auth/setup` | 首次初始化站长，仅在账户表为空时可用 |
-| `GET /admin/api/auth/status` | 登录状态、是否已初始化、是否允许注册 |
-| `POST /admin/api/auth/register` | 公开注册（需开启允许注册，注册账户固定为成员） |
+| `GET /admin/api/auth/status` | 登录状态、是否已初始化、是否允许注册、是否开启邮箱验证 |
+| `POST /admin/api/auth/register` | 公开注册（需开启允许注册；开启邮箱验证时需提供 `email` + `code`） |
+| `POST /admin/api/auth/register-code` | 发送注册邮箱验证码，body：`{ "email": "..." }` |
+| `POST /admin/api/auth/forgot-password` | 发送密码重置验证码，body：`{ "identifier": "用户名或邮箱" }` |
+| `POST /admin/api/auth/reset-password` | 重置密码，body：`{ "identifier": "...", "code": "123456", "newPassword": "..." }` |
 | `POST /admin/api/auth/login` | 用户名 + 密码登录，返回会话令牌 |
 | `POST /admin/api/auth/logout` | 退出登录 |
 | `GET /admin/api/auth/me` | 当前登录账户 |
-| `POST /admin/api/auth/password` | 修改自己的密码 |
+| `GET /admin/api/profile` | 当前账户的个人资料、站点名和邮件服务状态 |
+| `PUT /admin/api/profile` | 修改显示名，body：`{ "displayName": "..." }` |
+| `POST /admin/api/profile/email-code` | 发送邮箱验证码；已绑定邮箱发到当前邮箱，未绑定发到新邮箱，body：`{ "newEmail": "..." }` |
+| `PUT /admin/api/profile/email` | 修改/绑定邮箱，body：`{ "newEmail": "...", "code": "123456" }` |
+| `POST /admin/api/profile/password-code` | 发送密码修改验证码，body：`{ "currentPassword": "..." }` |
+| `PUT /admin/api/profile/password` | 修改密码，body：`{ "currentPassword": "...", "newPassword": "...", "code": "123456" }` |
+| `POST /admin/api/auth/password` | 兼容接口；现在同样需要 `currentPassword` + `newPassword` + 邮箱验证码 `code` |
 
 图片和设置接口（需要登录，写操作按权限校验）：
 
@@ -118,6 +155,7 @@ $env:PORT=3000; node server.js
 | `DELETE /admin/api/images/{id}` | 删除原图 + webp（本人、管理员或站长） |
 | `POST /admin/api/scan` | 扫描 `data/images/`（站长/管理员），新增图片为待审核 |
 | `GET/PUT /admin/api/settings` | 读取设置 / 保存设置（站长/管理员；端口仅站长） |
+| `POST /admin/api/settings/test-email` | 发送 SMTP 测试邮件（仅站长），body：`{ "to": "收件邮箱" }` |
 | `GET /admin/api/stats` | 统计（站长/管理员/成员） |
 
 审核接口（站长 / 管理员 / 审核员）：
@@ -133,7 +171,7 @@ $env:PORT=3000; node server.js
 |---|---|
 | `GET /admin/api/users` | 账户列表（含图片数量、可分配身份组） |
 | `POST /admin/api/users` | 创建账户：`username`、`password`、`role`、`displayName` |
-| `PATCH /admin/api/users/{id}` | 改角色 / 显示名 / 禁用 / 重置密码 |
+| `PATCH /admin/api/users/{id}` | 改角色 / 显示名 / 邮箱 / 禁用 / 重置密码；不能修改自己的邮箱或密码 |
 | `DELETE /admin/api/users/{id}` | 删除账户（图片保留，变为无归属） |
 
 ### 命令行上传
@@ -213,10 +251,17 @@ HMCL 支持网络背景图片，HTTP 和 HTTPS 都可以，**没有 HTTPS 不一
 | `randomPreferWebp` | `true` | `/random` 默认跳 WebP |
 | `allowPublicList` | `false` | `/list` 是否需要登录 |
 | `allowRegistration` | `true` | 是否允许前台公开注册；关闭后注册按钮隐藏，接口返回 403 |
+| `enableEmailVerification` | `false` | 开启后注册必须邮箱验证码，忘记密码通过邮箱重置（仅站长可改） |
+| `smtpHost` | 空 | SMTP 主机（仅站长可改） |
+| `smtpPort` | `587` | SMTP 端口（仅站长可改） |
+| `smtpSecure` | `false` | SMTP 使用 SSL/TLS（仅站长可改） |
+| `smtpUser` | 空 | SMTP 用户名（仅站长可改） |
+| `smtpPass` | 空 | SMTP 密码/授权码，只保存不回传（仅站长可改） |
+| `smtpFrom` | 空 | 发件地址（仅站长可改） |
 | `maxUploadMB` | `20` | 单张上限 |
 | `port` | `2618` | 端口（`PORT` 环境变量优先；仅站长可修改） |
 
-标签功能默认关闭；需要按标签筛选时再到设置里打开。
+标签始终启用；`/random` 和 `/list` 都支持按标签筛选。
 
 ## 数据与备份
 
@@ -311,3 +356,9 @@ BG_REMOTE_API="http://127.0.0.1:2618/random" node.exe node.js
 - 会话令牌只存 SHA-256 哈希；Cookie 为 HttpOnly + SameSite=Lax
 - 只接受 png / jpg / webp / gif / avif，拒绝 SVG（避免脚本注入）
 - 图片文件名限制为十六进制 ID + 扩展名，挡掉路径穿越
+
+## 许可证
+
+本项目使用 **GNU General Public License v3.0 only**（GPL-3.0-only）。
+
+完整许可证文本见 [LICENSE](LICENSE)。

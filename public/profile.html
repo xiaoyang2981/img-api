@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>个人信息</title>
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    [hidden] { display: none !important; }
+    :root {
+        --bg: #12141a; --panel: rgba(255, 255, 255, .05); --panel-hover: rgba(255, 255, 255, .08);
+        --border: rgba(255, 255, 255, .12); --text: #e8ebf2; --muted: #8b93a7;
+        --accent: #50b7fe; --danger: #e74c3c; --ok: #2ecc71; --warn: #f0a020;
+    }
+    body {
+        background: radial-gradient(1200px 600px at 20% -10%, #1b2740 0%, var(--bg) 55%);
+        color: var(--text); font-family: 'Segoe UI', 'Microsoft YaHei', -apple-system, sans-serif;
+        min-height: 100vh; padding: 24px;
+    }
+    a { color: var(--accent); text-decoration: none; }
+    .wrap { max-width: 860px; margin: 0 auto; }
+    header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 22px; gap: 12px; flex-wrap: wrap; }
+    h1 { font-size: 1.3rem; }
+    .account { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: .82rem; color: var(--muted); }
+    .account .who b { color: var(--ok); }
+    .account .who .role { color: var(--accent); margin-left: 5px; }
+    .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 20px; margin-bottom: 18px; }
+    h2 { font-size: .98rem; }
+    .identity-panel { padding: 18px 20px; }
+    .identity { display: flex; align-items: center; min-width: 0; }
+    .identity-copy { min-width: 0; }
+    .identity-name { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .identity-name b { font-size: 1.05rem; }
+    .badge { font-size: .68rem; padding: 2px 8px; border-radius: 99px; border: 1px solid var(--border); color: var(--muted); }
+    .badge.owner { color: #ffd75e; border-color: rgba(241,196,15,.45); background: rgba(241,196,15,.1); }
+    .badge.admin { color: #7ec8ff; border-color: rgba(80,183,254,.4); background: rgba(80,183,254,.1); }
+    .badge.moderator { color: #c8b4ff; border-color: rgba(124,108,255,.45); background: rgba(124,108,255,.1); }
+    .badge.member { color: #9fe7c0; border-color: rgba(46,204,113,.35); background: rgba(46,204,113,.08); }
+    .meta { color: var(--muted); font-size: .78rem; line-height: 1.7; margin-top: 5px; word-break: break-word; }
+    .section-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 10px; }
+    .status { font-size: .7rem; padding: 3px 9px; border-radius: 99px; border: 1px solid var(--border); color: var(--muted); }
+    .status.ok { color: #6ee7a4; border-color: rgba(46,204,113,.4); background: rgba(46,204,113,.09); }
+    .status.warn { color: #ffbf69; border-color: rgba(240,160,32,.4); background: rgba(240,160,32,.09); }
+    .hint { color: var(--muted); font-size: .8rem; line-height: 1.7; margin-bottom: 14px; }
+    .hint b { color: var(--text); font-weight: 600; }
+    .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+    label { font-size: .8rem; color: var(--muted); }
+    input {
+        width: 100%; background: rgba(0,0,0,.25); color: var(--text); border: 1px solid var(--border);
+        border-radius: 9px; padding: 9px 12px; font-size: .88rem; outline: none; font-family: inherit;
+    }
+    input:focus { border-color: var(--accent); }
+    input:disabled { opacity: .5; cursor: not-allowed; }
+    .field-help { color: var(--muted); font-size: .74rem; line-height: 1.6; }
+    .code-row { display: flex; gap: 8px; align-items: stretch; }
+    .code-row input { flex: 1; min-width: 0; }
+    .code-row button { flex: none; white-space: nowrap; }
+    .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    button {
+        background: linear-gradient(45deg, #50b7fe, #3aa7fe); color: #fff; border: none;
+        border-radius: 9px; padding: 9px 16px; font-size: .86rem; cursor: pointer; font-family: inherit;
+    }
+    button:hover { filter: brightness(1.06); }
+    button.ghost { background: var(--panel); border: 1px solid var(--border); color: var(--text); }
+    button.ghost:hover { background: var(--panel-hover); }
+    button.mini { padding: 6px 10px; font-size: .78rem; }
+    button:disabled { opacity: .5; cursor: not-allowed; filter: none; }
+    .disabled-panel { opacity: .72; }
+    .notice { color: #ffbf69; font-size: .78rem; line-height: 1.7; margin-top: 8px; }
+    .toast {
+        position: fixed; left: 50%; bottom: 32px; transform: translate(-50%, 20px);
+        background: #1e2430; border: 1px solid var(--border); padding: 10px 18px; border-radius: 10px;
+        font-size: .86rem; opacity: 0; pointer-events: none; transition: .25s; z-index: 80;
+    }
+    .toast.on { opacity: 1; transform: translate(-50%, 0); }
+    .toast.err { border-color: rgba(231,76,60,.5); color: #ff9d92; }
+    html[data-theme="light"] .status.ok { color: #15803d; background: #ecfdf3; border-color: rgba(21,128,61,.35); }
+    html[data-theme="light"] .status.warn { color: #a16207; background: #fffbeb; border-color: rgba(161,98,7,.35); }
+    html[data-theme="light"] .notice { color: #9a5b00; }
+    @media (max-width: 600px) {
+        body { padding: 14px; }
+        .panel { padding: 16px; }
+        .identity-panel { padding: 16px; }
+        .code-row { flex-direction: column; }
+        .code-row button { width: 100%; }
+        .row button { width: 100%; }
+    }
+</style>
+<link rel="stylesheet" href="theme.css">
+<script src="theme.js"></script>
+</head>
+<body>
+<div class="wrap">
+    <header>
+        <h1>👤 个人信息</h1>
+        <div class="account">
+            <span class="who" id="whoami">加载中…</span>
+            <a href="/" id="homeLink">前台</a>
+            <a href="/admin" id="workspaceLink">返回后台</a>
+            <a href="/admin/users" id="usersLink" hidden>账户管理</a>
+            <button class="theme-toggle" type="button" data-theme-toggle>☀️</button>
+            <button class="ghost mini" id="logoutBtn">退出登录</button>
+        </div>
+    </header>
+
+    <section class="panel identity-panel">
+        <div class="identity">
+            <div class="identity-copy">
+                <div class="identity-name">
+                    <b id="displayNameText">…</b>
+                    <span class="badge member" id="roleBadge">成员</span>
+                </div>
+                <div class="meta" id="accountMeta">正在读取账户信息…</div>
+            </div>
+        </div>
+    </section>
+
+    <section class="panel">
+        <div class="section-head">
+            <h2>基本资料</h2>
+        </div>
+        <p class="hint">用户名 <b id="usernameText">-</b> 不可修改；显示名会出现在后台、前台和账户信息中。</p>
+        <div class="field">
+            <label for="displayName">显示名</label>
+            <input type="text" id="displayName" maxlength="60" autocomplete="name" placeholder="最多 60 个字符">
+        </div>
+        <div class="row">
+            <button id="saveProfileBtn">保存资料</button>
+        </div>
+    </section>
+
+    <section class="panel" id="emailPanel">
+        <div class="section-head">
+            <h2 id="emailTitle">修改邮箱</h2>
+            <span class="status" id="emailStatus">未绑定</span>
+        </div>
+        <p class="hint" id="emailHint">当前邮箱：<b>未绑定</b></p>
+        <div class="field">
+            <label for="newEmail">新邮箱</label>
+            <input type="email" id="newEmail" autocomplete="email" placeholder="you@example.com">
+        </div>
+        <div class="field">
+            <label for="emailCode">邮箱验证码</label>
+            <div class="code-row">
+                <input type="text" id="emailCode" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="6 位验证码">
+                <button type="button" class="ghost" id="sendEmailCodeBtn">发送验证码</button>
+            </div>
+            <span class="field-help" id="emailCodeHelp">验证码会发送到当前邮箱。</span>
+        </div>
+        <div class="row">
+            <button id="saveEmailBtn">保存邮箱</button>
+        </div>
+        <p class="notice" id="emailNotice" hidden></p>
+    </section>
+
+    <section class="panel" id="passwordPanel">
+        <div class="section-head">
+            <h2>修改密码</h2>
+        </div>
+        <p class="hint" id="passwordHint">修改密码需要验证当前邮箱，验证成功后其他设备会退出登录。</p>
+        <div class="field">
+            <label for="currentPassword">当前密码</label>
+            <input type="password" id="currentPassword" autocomplete="current-password" placeholder="输入当前密码">
+        </div>
+        <div class="field">
+            <label for="newPassword">新密码</label>
+            <input type="password" id="newPassword" autocomplete="new-password" placeholder="至少 8 位">
+        </div>
+        <div class="field">
+            <label for="confirmPassword">确认新密码</label>
+            <input type="password" id="confirmPassword" autocomplete="new-password" placeholder="再次输入新密码">
+        </div>
+        <div class="field">
+            <label for="passwordCode">邮箱验证码</label>
+            <div class="code-row">
+                <input type="text" id="passwordCode" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="6 位验证码">
+                <button type="button" class="ghost" id="sendPasswordCodeBtn">发送验证码</button>
+            </div>
+            <span class="field-help" id="passwordCodeHelp">验证码会发送到当前邮箱。</span>
+        </div>
+        <div class="row">
+            <button id="savePasswordBtn">修改密码</button>
+        </div>
+        <p class="notice" id="passwordNotice" hidden></p>
+    </section>
+
+    <footer class="site-footer">
+        <span>© <span data-year>2026</span> <span data-footer-site>梦星的小图床</span> · img-api</span>
+        <span>All rights reserved.</span>
+    </footer>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+    const BASE = location.pathname.replace(/\/admin(\/.*)?$/, '');
+    const API = BASE + '/admin/api';
+    const $ = (id) => document.getElementById(id);
+    const ROLE_LABELS = { owner: '站长', admin: '管理员', moderator: '审核员', member: '成员' };
+    const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    document.getElementById('homeLink').href = BASE + '/';
+    document.getElementById('workspaceLink').href = BASE + '/admin';
+    document.getElementById('usersLink').href = BASE + '/admin/users';
+
+    let state = null;
+    let mailConfigured = false;
+    let toastTimer = null;
+    const cooldowns = { email: null, password: null };
+
+    const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (ch) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[ch]));
+
+    const toast = (message, isError = false) => {
+        const el = $('toast');
+        el.textContent = message;
+        el.className = 'toast on' + (isError ? ' err' : '');
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => { el.className = 'toast'; }, 2800);
+    };
+
+    const request = async (path, options = {}) => {
+        const headers = Object.assign({}, options.headers || {});
+        if (options.json !== undefined) {
+            headers['Content-Type'] = 'application/json';
+            options.body = JSON.stringify(options.json);
+        }
+        const response = await fetch(API + path, Object.assign({}, options, {
+            headers,
+            credentials: 'same-origin'
+        }));
+        if (response.status === 401) {
+            location.href = BASE + '/login';
+            throw new Error('登录已过期');
+        }
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.message || ('请求失败 ' + response.status));
+        return data;
+    };
+
+    const fmtDate = (value) => {
+        if (!value) return '-';
+        const date = new Date(value);
+        return Number.isNaN(date.getTime()) ? '-' : date.toLocaleString('zh-CN', { hour12: false });
+    };
+
+    const setDisabled = (ids, disabled) => {
+        ids.forEach((id) => { $(id).disabled = disabled; });
+    };
+
+    const render = () => {
+        if (!state) return;
+
+        const user = state.user;
+        const name = user.displayName || user.username;
+        const role = user.role || 'member';
+        const roleText = ROLE_LABELS[role] || role;
+        const hasEmail = Boolean(user.email);
+
+        $('whoami').innerHTML = '<b>' + esc(name) + '</b> · ' + esc(roleText);
+        $('displayNameText').textContent = name;
+        $('roleBadge').textContent = roleText;
+        $('roleBadge').className = 'badge ' + role;
+        $('accountMeta').textContent = '@' + user.username + ' · ' + roleText + ' · 加入于 ' + fmtDate(user.createdAt);
+        $('usernameText').textContent = user.username;
+
+        $('workspaceLink').href = BASE + (role === 'moderator' ? '/admin/review' : '/admin');
+        $('workspaceLink').textContent = role === 'moderator' ? '返回审核台' : '返回后台';
+        $('usersLink').hidden = !['owner', 'admin'].includes(role);
+
+        $('emailTitle').textContent = hasEmail ? '修改邮箱' : '绑定邮箱';
+        $('emailStatus').textContent = mailConfigured ? (hasEmail ? '已绑定' : '未绑定') : '邮件未配置';
+        $('emailStatus').className = 'status ' + (mailConfigured ? (hasEmail ? 'ok' : 'warn') : 'warn');
+        $('emailHint').innerHTML = hasEmail
+            ? '当前邮箱：<b>' + esc(user.email) + '</b>。修改邮箱需要验证当前邮箱，验证码会发送到当前邮箱。'
+            : '当前账户尚未绑定邮箱。首次绑定会向新邮箱发送验证码，验证后即可用于修改密码和邮箱。';
+        $('emailCodeHelp').textContent = hasEmail
+            ? '验证码会发送到当前邮箱 ' + user.email + '。'
+            : '验证码会发送到新邮箱。';
+
+        const emailReady = mailConfigured;
+        setDisabled(['newEmail', 'emailCode', 'sendEmailCodeBtn', 'saveEmailBtn'], !emailReady);
+        if (!emailReady) {
+            $('emailNotice').hidden = false;
+            $('emailNotice').textContent = '站长尚未配置邮件服务，暂时无法绑定或修改邮箱。';
+        } else {
+            $('emailNotice').hidden = true;
+        }
+        if (cooldowns.email === null) {
+            $('sendEmailCodeBtn').disabled = !emailReady;
+            $('sendEmailCodeBtn').textContent = '发送验证码';
+        }
+
+        const passwordReady = Boolean(hasEmail && mailConfigured);
+        setDisabled(['currentPassword', 'newPassword', 'confirmPassword', 'passwordCode', 'sendPasswordCodeBtn', 'savePasswordBtn'], !passwordReady);
+        $('passwordPanel').classList.toggle('disabled-panel', !passwordReady);
+        $('passwordHint').textContent = passwordReady
+            ? '修改密码需要输入当前密码，并验证当前邮箱。验证成功后其他设备会退出登录。'
+            : (hasEmail
+                ? '站长尚未配置邮件服务，暂时无法修改密码。'
+                : '请先绑定邮箱，再修改密码。');
+        $('passwordCodeHelp').textContent = hasEmail
+            ? '验证码会发送到当前邮箱 ' + user.email + '。'
+            : '绑定邮箱后才能发送验证码。';
+        if (!passwordReady) {
+            $('passwordNotice').hidden = false;
+            $('passwordNotice').textContent = hasEmail
+                ? '邮件服务未配置，暂时无法发送密码修改验证码。'
+                : '出于安全考虑，修改密码前需要先绑定邮箱。';
+        } else {
+            $('passwordNotice').hidden = true;
+        }
+        if (cooldowns.password === null) {
+            $('sendPasswordCodeBtn').disabled = !passwordReady;
+            $('sendPasswordCodeBtn').textContent = '发送验证码';
+        }
+
+        $('displayName').value = user.displayName || '';
+        document.title = (state.siteName || '梦星的小图床') + ' · 个人信息';
+        document.querySelectorAll('[data-footer-site]').forEach((el) => {
+            el.textContent = state.siteName || '梦星的小图床';
+        });
+    };
+
+    const load = async () => {
+        const data = await request('/profile');
+        state = data;
+        mailConfigured = Boolean(data.mailConfigured);
+        render();
+    };
+
+    const startCooldown = (kind) => {
+        const button = $(kind === 'email' ? 'sendEmailCodeBtn' : 'sendPasswordCodeBtn');
+        let left = 60;
+
+        clearInterval(cooldowns[kind]);
+        button.disabled = true;
+        button.textContent = left + 's';
+        cooldowns[kind] = setInterval(() => {
+            left -= 1;
+            if (left <= 0) {
+                clearInterval(cooldowns[kind]);
+                cooldowns[kind] = null;
+                button.textContent = '发送验证码';
+                button.disabled = false;
+                return;
+            }
+            button.textContent = left + 's';
+        }, 1000);
+    };
+
+    $('saveProfileBtn').onclick = async () => {
+        try {
+            const data = await request('/profile', {
+                method: 'PUT',
+                json: { displayName: $('displayName').value.trim() }
+            });
+            state = data;
+            render();
+            toast('个人资料已保存');
+        } catch (error) {
+            toast(error.message, true);
+        }
+    };
+
+    $('sendEmailCodeBtn').onclick = async () => {
+        const newEmail = $('newEmail').value.trim();
+
+        if (!EMAIL_PATTERN.test(newEmail)) {
+            toast('请输入正确的新邮箱地址', true);
+            return;
+        }
+
+        $('sendEmailCodeBtn').disabled = true;
+        $('sendEmailCodeBtn').textContent = '发送中…';
+
+        try {
+            const data = await request('/profile/email-code', {
+                method: 'POST',
+                json: { newEmail }
+            });
+            toast('验证码已发送至 ' + data.to);
+            startCooldown('email');
+        } catch (error) {
+            toast(error.message, true);
+            $('sendEmailCodeBtn').disabled = !mailConfigured;
+            $('sendEmailCodeBtn').textContent = '发送验证码';
+        }
+    };
+
+    $('saveEmailBtn').onclick = async () => {
+        const newEmail = $('newEmail').value.trim();
+        const code = $('emailCode').value.trim();
+
+        if (!EMAIL_PATTERN.test(newEmail)) {
+            toast('请输入正确的新邮箱地址', true);
+            return;
+        }
+        if (!/^\d{6}$/.test(code)) {
+            toast('请输入 6 位邮箱验证码', true);
+            return;
+        }
+
+        const wasBound = Boolean(state.user.email);
+        try {
+            const data = await request('/profile/email', {
+                method: 'PUT',
+                json: { newEmail, code }
+            });
+            state = data;
+            mailConfigured = Boolean(data.mailConfigured);
+            $('newEmail').value = '';
+            $('emailCode').value = '';
+            $('passwordCode').value = '';
+            clearInterval(cooldowns.email);
+            clearInterval(cooldowns.password);
+            cooldowns.email = null;
+            cooldowns.password = null;
+            render();
+            toast(wasBound ? '邮箱已更新' : '邮箱已绑定');
+        } catch (error) {
+            toast(error.message, true);
+        }
+    };
+
+    $('sendPasswordCodeBtn').onclick = async () => {
+        const currentPassword = $('currentPassword').value;
+
+        if (!currentPassword) {
+            toast('请先输入当前密码', true);
+            return;
+        }
+
+        $('sendPasswordCodeBtn').disabled = true;
+        $('sendPasswordCodeBtn').textContent = '发送中…';
+
+        try {
+            await request('/profile/password-code', {
+                method: 'POST',
+                json: { currentPassword }
+            });
+            toast('验证码已发送至当前邮箱');
+            startCooldown('password');
+        } catch (error) {
+            toast(error.message, true);
+            $('sendPasswordCodeBtn').disabled = false;
+            $('sendPasswordCodeBtn').textContent = '发送验证码';
+        }
+    };
+
+    $('savePasswordBtn').onclick = async () => {
+        const currentPassword = $('currentPassword').value;
+        const newPassword = $('newPassword').value;
+        const confirmPassword = $('confirmPassword').value;
+        const code = $('passwordCode').value.trim();
+
+        if (!currentPassword) {
+            toast('请输入当前密码', true);
+            return;
+        }
+        if (newPassword.length < 8) {
+            toast('新密码至少 8 位', true);
+            return;
+        }
+        if (newPassword !== confirmPassword) {
+            toast('两次输入的新密码不一致', true);
+            return;
+        }
+        if (!/^\d{6}$/.test(code)) {
+            toast('请输入 6 位邮箱验证码', true);
+            return;
+        }
+
+        try {
+            await request('/profile/password', {
+                method: 'PUT',
+                json: { currentPassword, newPassword, code }
+            });
+            $('currentPassword').value = '';
+            $('newPassword').value = '';
+            $('confirmPassword').value = '';
+            $('passwordCode').value = '';
+            toast('密码已修改，其他设备已退出登录');
+        } catch (error) {
+            toast(error.message, true);
+        }
+    };
+
+    $('logoutBtn').onclick = async () => {
+        try {
+            await request('/auth/logout', { method: 'POST' });
+        } catch {
+            // 会话失效也直接回登录页
+        }
+        location.href = BASE + '/login';
+    };
+
+    const boot = async () => {
+        try {
+            await load();
+        } catch (error) {
+            toast(error.message, true);
+        }
+    };
+
+    boot();
+</script>
+</body>
+</html>
