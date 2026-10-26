@@ -417,14 +417,19 @@ location /img/ {
 - 默认每 30 分钟执行一次
 - 也可以在 GitHub Actions 页面手动运行
 - 同步所有分支和 tag
+- 自动检测缺失的 GitHub Release，并读取 Gitee 对应 Release 的标题、说明和预发布标记
+- 首次运行会补齐所有历史 Release；之后只创建新 tag 对应的 Release
+- 如果 Gitee 还没有对应 Release，会尝试从 `CHANGELOG.md` 提取版本说明，再回退到 tag 信息
+- 已存在的 GitHub Release 不会被覆盖
 - Gitee 是唯一源仓库，GitHub 上的独立提交可能被覆盖
-- Git tag 会同步，但 GitHub Release 不会自动创建
 
-Gitee 仓库已公开，因此不需要 `GITEE_TOKEN`。工作流默认使用 GitHub Actions 自带的 `GITHUB_TOKEN` 推送。
+Gitee 仓库已公开，因此不需要 `GITEE_TOKEN`。工作流默认使用 GitHub Actions 自带的 `GITHUB_TOKEN` 推送和创建 Release。
 
 如需同步 workflow 文件本身的改动，可以在 GitHub 的 `Settings → Secrets and variables → Actions` 中额外配置：
 
 - `GH_SYNC_TOKEN`：GitHub PAT，具备 Contents 和 Workflows 读写权限
+
+不配置 `GH_SYNC_TOKEN` 时，工作流会自动回退到 `GITHUB_TOKEN`。
 
 GitHub 仓库地址：`https://github.com/xiaoyang2981/img-api`
 

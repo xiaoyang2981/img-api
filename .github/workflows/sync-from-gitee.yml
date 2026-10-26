@@ -8,6 +8,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: sync-from-gitee
+  cancel-in-progress: false
+
 jobs:
   mirror:
     runs-on: ubuntu-latest
@@ -21,3 +25,53 @@ jobs:
           git clone --mirror "https://gitee.com/xiaoyang2981/img-api.git" mirror.git
           cd mirror.git
           git push --mirror "https://x-access-token:${GH_SYNC_TOKEN}@github.com/xiaoyang2981/img-api.git"
+
+      - name: Create missing GitHub releases
+        env:
+          GH_TOKEN: ${{ secrets.GH_SYNC_TOKEN || github.token }}
+        run: |
+          set -euo pipefail
+          repo="xiaoyang2981/img-api"
+
+          for tag in $(git -C mirror.git tag --sort=version:refname); do
+            if gh release view "$tag" --repo "$repo" >/dev/null 2>&1; then
+              echo "Release already exists: $tag"
+              continue
+            fi
+
+            encoded=$(printf '%s' "$tag" | jq -sRr @uri)
+            gitee_json=$(curl -fsSL "https://gitee.com/api/v5/repos/xiaoyang2981/img-api/releases/tags/${encoded}" 2>/dev/null || true)
+            name="$tag"
+            body=""
+            prerelease="false"
+
+            if [ -n "$gitee_json" ] && echo "$gitee_json" | jq -e . >/dev/null 2>&1; then
+              name=$(echo "$gitee_json" | jq -r '.name // empty')
+              body=$(echo "$gitee_json" | jq -r '.body // empty')
+              prerelease=$(echo "$gitee_json" | jq -r '.prerelease // false')
+              [ -n "$name" ] || name="$tag"
+            fi
+
+            if [ -z "$body" ]; then
+              version=${tag#v}
+              body=$(git -C mirror.git show "refs/tags/${tag}:CHANGELOG.md" 2>/dev/null | awk -v ver="$version" '
+                index($0, "## " ver) == 1 { show=1; next }
+                /^## / { show=0 }
+                show
+              ' || true)
+            fi
+
+            if [ -z "$body" ]; then
+              body=$(git -C mirror.git tag -l --format='%(contents)' "$tag")
+            fi
+
+            if [ -z "$body" ]; then
+              body="Automated release for ${tag}."
+            fi
+
+            args=(release create "$tag" --repo "$repo" --title "$name" --notes "$body")
+            if [ "$prerelease" = "true" ]; then
+              args+=(--prerelease)
+            fi
+            gh "${args[@]}"
+          done
