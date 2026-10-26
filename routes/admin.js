@@ -443,6 +443,37 @@ adminRoutes.post('/api/auth/password', requireAuth, async (c) => {
 
 // —— 设置 ——
 
+adminRoutes.post('/api/settings/test-email', requireRoles('owner'), async (c) => {
+    const config = getConfig();
+
+    if (!isMailConfigured(config)) {
+        return c.json({ error: true, message: 'SMTP 尚未配置，请先保存 SMTP 设置' }, 400);
+    }
+
+    const body = await readJson(c);
+    const current = c.get('user');
+    const to = normalizeEmail(body.to)
+        || normalizeEmail(config.smtpUser)
+        || normalizeEmail(current.email);
+
+    if (!isEmail(to)) {
+        return c.json({ error: true, message: '请填写正确的测试收件邮箱' }, 400);
+    }
+
+    try {
+        await sendMail({
+            to,
+            subject: `${config.siteName} SMTP 测试邮件`,
+            text: `这是一封来自 ${config.siteName} 的测试邮件。\n\n如果你收到这封信，说明 SMTP 配置可以正常发信。`
+        });
+    } catch (error) {
+        console.error('测试邮件发送失败:', error.message);
+        return c.json({ error: true, message: '测试邮件发送失败，请检查 SMTP 配置' }, 502);
+    }
+
+    return c.json({ ok: true, to });
+});
+
 adminRoutes.get('/api/settings', requireAuth, (c) => c.json(settingPayload(c.get('user'))));
 
 adminRoutes.put('/api/settings', requireRoles('owner', 'admin'), async (c) => {

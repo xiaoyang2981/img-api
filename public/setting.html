@@ -214,6 +214,17 @@
             <input type="text" id="smtpFrom" placeholder="you@example.com" style="width:220px;">
         </div>
 
+        <div class="item">
+            <div class="text">
+                <b>测试 SMTP</b>
+                <span>发送一封测试邮件，验证 SMTP 是否可用。请先保存上面的配置。</span>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                <input type="email" id="testEmail" placeholder="收件邮箱" style="width:220px;">
+                <button class="ghost" type="button" id="testEmailBtn">发送测试邮件</button>
+            </div>
+        </div>
+
         <p class="hint" id="emailConfigHint">SMTP 尚未配置。</p>
     </div>
 
@@ -308,6 +319,9 @@
         $('smtpPass').value = '';
         $('smtpPass').placeholder = data.smtpPassSet ? '已设置，留空不修改' : 'SMTP 密码 / 授权码';
         $('smtpFrom').value = data.smtpFrom || '';
+        if (!$('testEmail').value) {
+            $('testEmail').value = data.smtpUser || '';
+        }
         $('emailConfigHint').textContent = data.emailConfigured
             ? 'SMTP 已配置。开启后注册必须邮箱验证码，忘记密码会发送邮件。'
             : 'SMTP 尚未配置。配置并保存后才能开启邮箱验证。';
@@ -355,6 +369,26 @@
         }
     };
 
+    $('testEmailBtn').onclick = async () => {
+        const button = $('testEmailBtn');
+        const original = button.textContent;
+        button.disabled = true;
+        button.textContent = '发送中…';
+
+        try {
+            const data = await request('/settings/test-email', {
+                method: 'POST',
+                json: { to: $('testEmail').value.trim() }
+            });
+            toast('测试邮件已发送' + (data.to ? '：' + data.to : ''));
+        } catch (error) {
+            toast(error.message, true);
+        } finally {
+            button.disabled = false;
+            button.textContent = original;
+        }
+    };
+
     $('reloadBtn').onclick = load;
 
     $('logoutBtn').onclick = async () => {
@@ -373,6 +407,9 @@
             $('whoami').innerHTML = '<b>' + String(currentUser.displayName || currentUser.username)
                 .replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]))
                 + '</b><span class="role">管理员</span>';
+            if (!$('testEmail').value && currentUser.email) {
+                $('testEmail').value = currentUser.email;
+            }
             await load();
         } catch (error) {
             toast(error.message, true);

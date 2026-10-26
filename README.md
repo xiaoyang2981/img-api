@@ -75,6 +75,7 @@ $env:PORT=3000; node server.js
 - 已有账户可以在「账户」页设置/修改邮箱（站长和管理员可管理；本人也可设置自己的邮箱）
 - SMTP 密码/授权码只保存不明文返回，设置页留空表示不修改
 - SMTP 未配置时不能开启邮箱验证，注册页会提示暂不可用
+- 设置页提供「发送测试邮件」按钮，可先保存 SMTP 配置再验证发信是否成功
 
 SMTP 配置保存在 SQLite 的 `settings` 表；QQ/163 邮箱通常需要使用「授权码」而不是登录密码。
 
@@ -135,6 +136,7 @@ SMTP 配置保存在 SQLite 的 `settings` 表；QQ/163 邮箱通常需要使用
 | `DELETE /admin/api/images/{id}` | 删除原图 + webp（本人、管理员或站长） |
 | `POST /admin/api/scan` | 扫描 `data/images/`（站长/管理员），新增图片为待审核 |
 | `GET/PUT /admin/api/settings` | 读取设置 / 保存设置（站长/管理员；端口仅站长） |
+| `POST /admin/api/settings/test-email` | 发送 SMTP 测试邮件（仅站长），body：`{ "to": "收件邮箱" }` |
 | `GET /admin/api/stats` | 统计（站长/管理员/成员） |
 
 审核接口（站长 / 管理员 / 审核员）：
