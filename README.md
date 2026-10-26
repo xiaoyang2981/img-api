@@ -84,6 +84,7 @@ $env:PORT=3000; node server.js
 | `GET /random?tag=wolf` | 只从带 `wolf` 标签的图片里随机 |
 | `GET /random?tag=wolf,dragon` | 从带 `wolf` **或** `dragon` 的图片里随机 |
 | `GET /random?tag=wolf,dragon&tagMode=all` | 只从同时带 `wolf` 和 `dragon` 的图片里随机 |
+| `GET /api/v1` | **直接返回图片字节，不 302**；支持同样的 `tag` / `tagMode` / `type` / `format=json` |
 | `GET /i/{file}` | 原图，`Cache-Control: immutable` |
 | `GET /w/{file}` | WebP 版本 |
 | `GET /list?page=1&pageSize=40&q=&tag=&tagMode=` | 分页列表（默认需要登录） |
@@ -158,6 +159,30 @@ curl -X POST http://localhost:2618/admin/api/upload \
 - `/random?tag=wolf,dragon&tagMode=all`：只取同时带这两个标签的图
 - `/list?tag=...&tagMode=...` 使用相同规则
 - 标签在上传/编辑时填写，逗号分隔；自动转小写、去重
+
+### 无法跟随 302 的客户端
+
+`/random` 默认返回 302 跳转。如果客户端不能跟随跳转，用 `/api/v1`，它直接返回图片字节：
+
+```bash
+# 保存一张随机 WebP
+curl -o random.webp "http://localhost:2618/api/v1"
+
+# 只取带 wolf 标签的图，要原图
+curl -o random.png "http://localhost:2618/api/v1?tag=wolf&type=origin"
+
+# 多标签：默认任意匹配，tagMode=all 要求全部匹配
+curl -o random.webp "http://localhost:2618/api/v1?tag=wolf,dragon&tagMode=all"
+
+# 只要 JSON 元数据
+curl "http://localhost:2618/api/v1?format=json"
+```
+
+也可以直接用于 `<img>`：
+
+```html
+<img src="http://your-host:2618/api/v1?tag=wolf">
+```
 
 ## 设置项
 

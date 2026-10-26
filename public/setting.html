@@ -164,6 +164,7 @@
         <table>
             <tr><th>接口</th><th>说明</th></tr>
             <tr><td><code>/random</code></td><td>随机一张，302 跳转。<code>?format=json</code> 返回 JSON，<code>?type=origin</code> 取原图，<code>?tag=wolf,dragon</code> 按标签（默认任意匹配），<code>?tagMode=all</code> 要求同时包含全部标签</td></tr>
+            <tr><td><code>/api/v1</code></td><td>直接返回图片字节，不 302，适合无法跟随跳转的客户端；支持同样的标签、<code>type</code> 和 <code>format=json</code> 参数</td></tr>
             <tr><td><code>/i/{file}</code></td><td>原图，长期缓存</td></tr>
             <tr><td><code>/w/{file}</code></td><td>WebP 版本</td></tr>
             <tr><td><code>/list</code></td><td>分页列表，需登录（除非开启公开）</td></tr>

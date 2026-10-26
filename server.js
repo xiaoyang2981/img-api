@@ -11,6 +11,7 @@ import { servePage } from './lib/pages.js';
 import { loadIndex } from './lib/index.js';
 import { adminRoutes } from './routes/admin.js';
 import {
+    apiV1Handler,
     basePath,
     healthHandler,
     imageHandler,
@@ -28,6 +29,8 @@ app.use('*', logger());
 
 // —— 公开接口 ——
 app.get('/random', randomHandler);
+app.get('/api/v1', apiV1Handler);
+app.get('/api/v1/', apiV1Handler);
 app.get('/i/:name', imageHandler);
 app.get('/w/:name', webpHandler);
 app.get('/list', listHandler);
@@ -56,6 +59,7 @@ app.notFound((c) =>
         path: c.req.path,
         endpoints: {
             random: '/random',
+            api: '/api/v1',
             origin: '/i/{file}',
             webp: '/w/{file}',
             list: '/list',
