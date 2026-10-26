@@ -61,7 +61,8 @@ $env:PORT=3000; node server.js
 - 首次绑定邮箱：验证码发送到新邮箱，验证后完成绑定
 - 修改已绑定邮箱：验证码发送到当前邮箱，确认后才能改成新邮箱
 - 修改密码：需要当前密码 + 当前邮箱验证码；成功后其他设备的登录会失效
-- 创建 API Token；创建或吊销重新生成时只在弹窗中显示一次
+- 创建/吊销 API Token；创建时只在弹窗中显示一次
+- 吊销后需要重新点击「创建 Token」生成，旧 Token 立即失效
 - 查看 Token 尾号、创建时间、限流触发次数和封禁状态
 - 未绑定邮箱时不能修改密码，需要先绑定邮箱
 - 邮箱或密码修改需要 SMTP 已配置；未配置时页面会提示并暂时禁用相关操作
@@ -137,7 +138,8 @@ SMTP 配置保存在 SQLite 的 `settings` 表；QQ/163 邮箱通常需要使用
 | 站长 | 2,000,000 次/分钟 | 按账户，固定额度 |
 
 - 每个账户在「个人信息」页可以创建或吊销自己的 **API Token**
-- Token 是随机、非顺序的哈希值，**只在创建或重新生成时显示一次**；关闭弹窗后只保留尾号
+- Token 是随机、非顺序的哈希值，**只在创建时显示一次**；关闭弹窗后只保留尾号
+- 吊销只会让旧 Token 失效，再次使用需要重新点击「创建 Token」
 - 支持三种携带方式：
   ```text
   Authorization: Bearer img_xxxxxxxx
@@ -180,7 +182,7 @@ SMTP 配置保存在 SQLite 的 `settings` 表；QQ/163 邮箱通常需要使用
 | `POST /admin/api/profile/password-code` | 发送密码修改验证码，body：`{ "currentPassword": "..." }` |
 | `PUT /admin/api/profile/password` | 修改密码，body：`{ "currentPassword": "...", "newPassword": "...", "code": "123456" }` |
 | `POST /admin/api/profile/token` | 创建 API Token；Token 只在本次响应中返回 |
-| `POST /admin/api/profile/token/revoke` | 吊销旧 Token 并生成新 Token；新 Token 只在本次响应中返回 |
+| `POST /admin/api/profile/token/revoke` | 吊销当前 Token，不自动生成新 Token |
 | `POST /admin/api/auth/password` | 兼容接口；现在同样需要 `currentPassword` + `newPassword` + 邮箱验证码 `code` |
 
 图片和设置接口（需要登录，写操作按权限校验）：

@@ -165,9 +165,9 @@
         <p class="field-help" id="tokenMeta">尚未创建 API Token。</p>
         <div class="row">
             <button type="button" id="createTokenBtn">创建 Token</button>
-            <button type="button" class="ghost" id="revokeTokenBtn" disabled>吊销并重新生成</button>
+            <button type="button" class="ghost" id="revokeTokenBtn" disabled>吊销 Token</button>
         </div>
-        <p class="field-help" id="tokenNote">Token 遗失后需要吊销并重新生成，旧 Token 会立即失效。</p>
+        <p class="field-help" id="tokenNote">Token 遗失后需要先吊销，再重新创建；旧 Token 会立即失效。</p>
     </section>
 
     <section class="panel" id="emailPanel">
@@ -336,12 +336,14 @@
                 (tokenBanned ? ' · 已封禁至 ' + fmtDate(bannedUntil) : '')
             : '尚未创建 API Token。';
         $('tokenNote').textContent = tokenBanned
-            ? 'Token 已被临时封禁，请联系管理员解除，或等待自动解封。'
+            ? (hasToken
+                ? 'Token 已被临时封禁，可以吊销；解除封禁后才能创建新 Token。'
+                : 'Token 已被临时封禁，解除封禁后才能创建新 Token。')
             : (hasToken
-                ? 'Token 只显示一次；如果遗失，请吊销并重新生成。'
-                : '创建后会弹窗显示一次，请立即复制保存。');
+                ? 'Token 只显示一次；如果遗失或需要更换，请先吊销，再重新创建。'
+                : '当前未创建 Token。创建后会弹窗显示一次，请立即复制保存。');
         $('createTokenBtn').disabled = hasToken || tokenBanned;
-        $('revokeTokenBtn').disabled = !hasToken || tokenBanned;
+        $('revokeTokenBtn').disabled = !hasToken;
 
         $('workspaceLink').href = BASE + (role === 'moderator' ? '/admin/review' : '/admin');
         $('workspaceLink').textContent = role === 'moderator' ? '返回审核台' : '返回后台';
@@ -619,14 +621,13 @@
     };
 
     $('revokeTokenBtn').onclick = async () => {
-        if (!confirm('吊销后旧 Token 会立即失效，并生成新的 Token。继续吗？')) return;
+        if (!confirm('吊销后旧 Token 会立即失效，需要重新创建。继续吗？')) return;
 
         try {
             const data = await request('/profile/token/revoke', { method: 'POST' });
             state = data.profile;
             render();
-            showTokenDialog(data.token);
-            toast('Token 已重新生成');
+            toast('Token 已吊销，请重新创建');
         } catch (error) {
             toast(error.message, true);
         }

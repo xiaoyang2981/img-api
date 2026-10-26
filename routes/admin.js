@@ -678,19 +678,11 @@ adminRoutes.post('/api/profile/token/revoke', requireAuth, async (c) => {
     if (!user.hasApiToken) {
         return c.json({ error: true, message: '当前账户还没有 Token' }, 400);
     }
-    if (tokenBanActive(user)) {
-        return c.json({ error: true, message: 'Token 已被临时封禁，暂时不能吊销' }, 403);
-    }
 
-    const issued = db.issueApiToken(user.id);
-    if (!issued) return c.json({ error: true, message: '账户不存在' }, 404);
+    const updated = db.revokeApiToken(user.id);
+    if (!updated) return c.json({ error: true, message: '账户不存在' }, 404);
 
-    return c.json({
-        token: issued.token,
-        hint: issued.hint,
-        createdAt: issued.createdAt,
-        profile: profilePayload(db.getUserById(user.id))
-    });
+    return c.json({ profile: profilePayload(updated) });
 });
 
 // 兼容旧接口：现在同样需要当前邮箱验证码
