@@ -5,18 +5,22 @@ import { getAllSettings, initDb, setSetting } from './lib/db.js';
 export * from './lib/paths.js';
 
 const DEFAULT_CONFIG = {
+    siteName: '梦星的小图床',       // 前台左上角显示的名称
     port: DEFAULT_PORT,           // 端口，环境变量 PORT 优先级更高
     enableTags: false,            // 默认不启用标签：/random 纯随机
     randomPreferWebp: true,       // /random 默认返回 webp
     allowPublicList: false,       // /list 是否需要登录
+    allowRegistration: true,      // 是否允许公开注册（注册的账户固定为成员）
     maxUploadMB: 20               // 单张图片大小上限
 };
 
 const coerce = {
+    siteName: (value) => String(value ?? '').trim().slice(0, 60) || '梦星的小图床',
     port: (value) => Math.min(65535, Math.max(1, Number(value) || DEFAULT_PORT)),
     enableTags: (value) => value === true || value === 'true',
     randomPreferWebp: (value) => value === true || value === 'true',
     allowPublicList: (value) => value === true || value === 'true',
+    allowRegistration: (value) => value === true || value === 'true',
     maxUploadMB: (value) => Math.min(500, Math.max(1, Number(value) || 20))
 };
 

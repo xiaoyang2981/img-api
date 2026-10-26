@@ -1,7 +1,6 @@
 import { Hono } from 'hono';
-import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
-import { PUBLIC_DIR, getConfig, updateConfig } from '../config.js';
+import { getConfig, updateConfig } from '../config.js';
+import { servePage } from '../lib/pages.js';
 import {
     clearLoginFailures,
     clearSession,
@@ -45,10 +44,12 @@ const isUniqueError = (error) => /UNIQUE constraint failed/i.test(error?.message
 const settingPayload = () => {
     const config = getConfig();
     return {
+        siteName: config.siteName,
         port: config.port,
         enableTags: config.enableTags,
         randomPreferWebp: config.randomPreferWebp,
         allowPublicList: config.allowPublicList,
+        allowRegistration: config.allowRegistration,
         maxUploadMB: config.maxUploadMB
     };
 };
@@ -58,17 +59,9 @@ const adminBase = (c) => {
     return pathname.replace(/\/admin(\/.*)?$/, '');
 };
 
-const redirectToLogin = (c) => c.redirect(`${adminBase(c)}/admin/login`);
+const redirectToLogin = (c) => c.redirect(`${adminBase(c)}/login`);
 
-const serveHtml = async (c, fileName) => {
-    try {
-        const html = await readFile(join(PUBLIC_DIR, fileName), 'utf8');
-        c.header('Cache-Control', 'no-store');
-        return c.html(html);
-    } catch {
-        return c.text('页面文件缺失: ' + fileName, 500);
-    }
-};
+const serveHtml = servePage;
 
 const canManageImage = (user, image) => user.role === 'admin' || image.ownerId === user.id;
 
@@ -124,6 +117,8 @@ adminRoutes.get('/api/auth/status', (c) => {
     return c.json({
         setup: db.countUsers() === 0,
         authenticated: Boolean(user),
+        allowRegistration: getConfig().allowRegistration,
+        siteName: getConfig().siteName,
         user: publicUser(user)
     });
 });
@@ -198,6 +193,46 @@ adminRoutes.post('/api/auth/login', async (c) => {
     setSessionCookie(c, session.token);
 
     return c.json({ user: publicUser(user), token: session.token, expiresAt: session.expiresAt });
+});
+
+adminRoutes.post('/api/auth/register', async (c) => {
+    if (!getConfig().allowRegistration) {
+        return c.json({ error: true, message: '注册暂未开放' }, 403);
+    }
+    if (db.countUsers() === 0) {
+        return c.json({ error: true, message: '系统尚未初始化，请先创建管理员账户' }, 409);
+    }
+
+    const body = await readJson(c);
+    const username = normalizeUsername(body.username);
+    const password = String(body.password || '');
+
+    const invalidUsername = usernameError(username);
+    if (invalidUsername) return c.json({ error: true, message: invalidUsername }, 400);
+    if (!validatePassword(password)) {
+        return c.json({ error: true, message: '密码至少 8 位' }, 400);
+    }
+
+    let user;
+
+    try {
+        user = db.createUser({
+            username,
+            passwordHash: await hashPassword(password),
+            role: 'user',
+            displayName: normalizeDisplayName(body.displayName) || username
+        });
+    } catch (error) {
+        if (isUniqueError(error)) {
+            return c.json({ error: true, message: '用户名已存在' }, 409);
+        }
+        throw error;
+    }
+
+    const session = createSession(c, user.id);
+    setSessionCookie(c, session.token);
+
+    return c.json({ user: publicUser(user), token: session.token, expiresAt: session.expiresAt }, 201);
 });
 
 adminRoutes.post('/api/auth/logout', (c) => {

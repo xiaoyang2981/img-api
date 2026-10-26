@@ -6,6 +6,7 @@
 <title>图床后台</title>
 <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
+    [hidden] { display: none !important; }
     :root {
         --bg: #12141a;
         --panel: rgba(255, 255, 255, 0.05);
@@ -132,7 +133,7 @@
 <body>
 <div class="wrap">
     <header>
-        <h1>🖼️ 图床后台 <span>·</span> <a href="admin/setting" id="settingLink" class="mini">设置</a> <a href="admin/users" id="usersLink" class="mini" hidden>账户</a></h1>
+        <h1>🖼️ 图床后台 <span>·</span> <a href="/" id="homeLink" class="mini">前台</a> <a href="admin/setting" id="settingLink" class="mini">设置</a> <a href="admin/users" id="usersLink" class="mini" hidden>账户</a></h1>
         <div class="account">
             <span class="who" id="whoami">加载中…</span>
             <button class="ghost mini" id="logoutBtn">退出登录</button>
@@ -214,6 +215,7 @@
 
     document.getElementById('settingLink').href = BASE + '/admin/setting';
     document.getElementById('usersLink').href = BASE + '/admin/users';
+    document.getElementById('homeLink').href = BASE + '/';
 
     let currentUser = null;
     let page = 1;
@@ -255,7 +257,7 @@
             credentials: 'same-origin'
         }));
         if (response.status === 401) {
-            location.href = BASE + '/admin/login';
+            location.href = BASE + '/login';
             throw new Error('登录已过期');
         }
         const data = await response.json().catch(() => ({}));
@@ -359,7 +361,7 @@
             });
 
             if (response.status === 401) {
-                location.href = BASE + '/admin/login';
+                location.href = BASE + '/login';
                 throw new Error('登录已过期');
             }
 
@@ -469,7 +471,7 @@
         } catch {
             // 会话已经失效也没关系，直接回登录页
         }
-        location.href = BASE + '/admin/login';
+        location.href = BASE + '/login';
     };
 
     $('editCancel').onclick = () => $('editOverlay').classList.remove('on');
@@ -512,6 +514,7 @@
 
             const settings = await request('/settings');
             applySettings(settings);
+            document.title = (settings.siteName || '梦星的小图床') + ' · 后台';
             await load();
         } catch (error) {
             toast(error.message, true);

@@ -184,7 +184,8 @@ export const statsHandler = (c) => {
         ...data,
         totalSizeMB: Number((data.totalSize / 1024 / 1024).toFixed(2)),
         webpSizeMB: Number((data.webpSize / 1024 / 1024).toFixed(2)),
-        enableTags: getConfig().enableTags
+        enableTags: getConfig().enableTags,
+        siteName: getConfig().siteName
     });
 };
 

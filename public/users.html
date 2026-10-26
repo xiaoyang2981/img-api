@@ -6,6 +6,7 @@
 <title>图床账户管理</title>
 <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
+    [hidden] { display: none !important; }
     :root {
         --bg: #12141a; --panel: rgba(255, 255, 255, .05); --panel-hover: rgba(255, 255, 255, .08);
         --border: rgba(255, 255, 255, .12); --text: #e8ebf2; --muted: #8b93a7;
@@ -135,7 +136,7 @@
             credentials: 'same-origin'
         }));
         if (response.status === 401) {
-            location.href = BASE + '/admin/login';
+            location.href = BASE + '/login';
             throw new Error('登录已过期');
         }
         const data = await response.json().catch(() => ({}));
@@ -287,7 +288,7 @@
         } catch {
             // 会话已经失效也没关系
         }
-        location.href = BASE + '/admin/login';
+        location.href = BASE + '/login';
     };
 
     const boot = async () => {

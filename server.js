@@ -7,6 +7,7 @@ import os from 'node:os';
 import { getPort, initConfig } from './config.js';
 import { closeDb, countUsers } from './lib/db.js';
 import { DB_FILE } from './lib/paths.js';
+import { servePage } from './lib/pages.js';
 import { loadIndex } from './lib/index.js';
 import { adminRoutes } from './routes/admin.js';
 import {
@@ -43,7 +44,10 @@ app.get('/admin/', (c) => c.redirect(`${basePath(c)}/admin`));
 // —— 管理后台 ——
 app.route('/admin', adminRoutes);
 
-app.get('/', (c) => c.redirect('/admin'));
+// —— 公开页面 ——
+app.get('/', (c) => servePage(c, 'index.html'));
+app.get('/login', (c) => servePage(c, 'login.html'));
+app.get('/register', (c) => servePage(c, 'login.html'));
 
 app.notFound((c) =>
     c.json({

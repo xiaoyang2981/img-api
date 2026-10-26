@@ -6,6 +6,7 @@
 <title>图床设置</title>
 <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
+    [hidden] { display: none !important; }
     :root {
         --bg: #12141a; --panel: rgba(255, 255, 255, .05); --panel-hover: rgba(255, 255, 255, .08);
         --border: rgba(255, 255, 255, .12); --text: #e8ebf2; --muted: #8b93a7;
@@ -104,10 +105,26 @@
 
         <div class="item">
             <div class="text">
+                <b>站点名称</b>
+                <span>显示在前台左上角，默认「梦星的小图床」。</span>
+            </div>
+            <input type="text" id="siteName" maxlength="60" placeholder="梦星的小图床" style="width:220px;">
+        </div>
+
+        <div class="item">
+            <div class="text">
                 <b>启用标签</b>
                 <span>关闭时：上传界面不显示标签，<code>/random</code> 忽略 <code>tag</code> 参数，纯随机（默认）。打开后可按标签筛选。</span>
             </div>
             <label class="switch"><input type="checkbox" id="enableTags"><i></i></label>
+        </div>
+
+        <div class="item">
+            <div class="text">
+                <b>允许公开注册</b>
+                <span>关闭后首页会隐藏注册按钮，注册接口返回 403。通过注册创建的账户固定为成员。</span>
+            </div>
+            <label class="switch"><input type="checkbox" id="allowRegistration"><i></i></label>
         </div>
 
         <div class="item">
@@ -199,7 +216,7 @@
             credentials: 'same-origin'
         }));
         if (response.status === 401) {
-            location.href = BASE + '/admin/login';
+            location.href = BASE + '/login';
             throw new Error('登录已过期');
         }
         const data = await response.json().catch(() => ({}));
@@ -209,13 +226,16 @@
 
     const apply = (data) => {
         settings = data;
+        $('siteName').value = data.siteName || '梦星的小图床';
         $('enableTags').checked = data.enableTags;
         $('randomPreferWebp').checked = data.randomPreferWebp;
         $('allowPublicList').checked = data.allowPublicList;
+        $('allowRegistration').checked = data.allowRegistration;
         $('maxUploadMB').value = data.maxUploadMB;
         $('port').value = data.port;
         $('activePort').textContent = location.port || '80';
         $('randomExample').textContent = location.origin + BASE + '/random?format=json';
+        document.title = (data.siteName || '梦星的小图床') + ' · 设置';
     };
 
     const load = async () => {
@@ -231,9 +251,11 @@
             const data = await request('/settings', {
                 method: 'PUT',
                 json: {
+                    siteName: $('siteName').value.trim(),
                     enableTags: $('enableTags').checked,
                     randomPreferWebp: $('randomPreferWebp').checked,
                     allowPublicList: $('allowPublicList').checked,
+                    allowRegistration: $('allowRegistration').checked,
                     maxUploadMB: Number($('maxUploadMB').value),
                     port: Number($('port').value)
                 }
@@ -253,7 +275,7 @@
         } catch {
             // 会话已经失效也没关系
         }
-        location.href = BASE + '/admin/login';
+        location.href = BASE + '/login';
     };
 
     const boot = async () => {

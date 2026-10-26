@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>梦星的小图床 · 随机图床</title>
+<meta name="description" content="自建图床：上传原图自动生成 WebP，随机取图接口可直接用作壁纸和背景图。">
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    [hidden] { display: none !important; }
+    :root {
+        --bg: #0f1117;
+        --panel: rgba(255, 255, 255, .045);
+        --border: rgba(255, 255, 255, .12);
+        --text: #eef1f7;
+        --muted: #8b93a7;
+        --accent: #50b7fe;
+        --accent-2: #7c6cff;
+        --ok: #2ecc71;
+    }
+    html { scroll-behavior: smooth; }
+    body {
+        background: radial-gradient(1100px 700px at 15% -10%, #1b2a45 0%, var(--bg) 58%);
+        color: var(--text);
+        font-family: 'Segoe UI', 'Microsoft YaHei', -apple-system, sans-serif;
+        min-height: 100vh;
+        overflow-x: hidden;
+    }
+    body::after {
+        content: '';
+        position: fixed;
+        width: 520px;
+        height: 520px;
+        right: -180px;
+        top: 20%;
+        background: radial-gradient(circle, rgba(124, 108, 255, .16), transparent 68%);
+        pointer-events: none;
+        z-index: 0;
+    }
+    a { color: inherit; text-decoration: none; }
+    .shell { width: min(1240px, calc(100% - 48px)); margin: 0 auto; position: relative; z-index: 1; }
+
+    header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 18px;
+        padding: 26px 0 10px;
+    }
+    .brand {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        font-weight: 700;
+        font-size: 1.05rem;
+        letter-spacing: .02em;
+    }
+    .brand .dot { color: var(--accent); }
+    .brand small { color: var(--muted); font-weight: 400; font-size: .72rem; margin-left: 2px; }
+    nav { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    nav a, nav button {
+        font: inherit;
+        font-size: .84rem;
+        color: var(--muted);
+        background: none;
+        border: none;
+        cursor: pointer;
+        padding: 8px 10px;
+        border-radius: 9px;
+    }
+    nav a:hover, nav button:hover { color: var(--text); background: var(--panel); }
+    nav a.primary {
+        background: linear-gradient(45deg, #50b7fe, #3aa7fe);
+        color: #fff;
+        padding: 8px 15px;
+    }
+    nav a.primary:hover { filter: brightness(1.08); background: linear-gradient(45deg, #50b7fe, #3aa7fe); }
+    .nav-user { color: var(--muted); font-size: .8rem; margin-right: 4px; }
+    .nav-user b { color: var(--ok); font-weight: 600; }
+
+    .hero {
+        display: grid;
+        grid-template-columns: minmax(0, .92fr) minmax(0, 1.08fr);
+        gap: clamp(32px, 6vw, 78px);
+        align-items: center;
+        min-height: calc(100vh - 170px);
+        padding: 40px 0 54px;
+    }
+    .copy { max-width: 560px; }
+    .eyebrow {
+        color: var(--accent);
+        font-size: .74rem;
+        letter-spacing: .18em;
+        text-transform: uppercase;
+        margin-bottom: 20px;
+    }
+    h1 {
+        font-size: clamp(2.1rem, 4.3vw, 3.8rem);
+        line-height: 1.14;
+        letter-spacing: -.035em;
+        font-weight: 750;
+        margin-bottom: 22px;
+    }
+    h1 span {
+        background: linear-gradient(100deg, #7ec8ff 0%, #9d8cff 55%, #ff9ecb 100%);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+    }
+    .lead {
+        color: var(--muted);
+        font-size: 1rem;
+        line-height: 1.9;
+        max-width: 500px;
+    }
+    .lead code {
+        color: #a9dbff;
+        background: rgba(80, 183, 254, .1);
+        border: 1px solid rgba(80, 183, 254, .2);
+        border-radius: 6px;
+        padding: 1px 6px;
+        font-size: .88em;
+    }
+    .actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 30px; }
+    .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        border-radius: 12px;
+        padding: 12px 21px;
+        font-size: .9rem;
+        font-weight: 600;
+        transition: .18s;
+        border: 1px solid transparent;
+        cursor: pointer;
+    }
+    .btn.primary {
+        background: linear-gradient(45deg, #50b7fe, #6a8dff);
+        color: #fff;
+        box-shadow: 0 10px 28px rgba(80, 183, 254, .24);
+    }
+    .btn.primary:hover { transform: translateY(-1px); filter: brightness(1.06); }
+    .btn.ghost {
+        background: var(--panel);
+        border-color: var(--border);
+        color: var(--text);
+    }
+    .btn.ghost:hover { background: rgba(255, 255, 255, .08); }
+    .stats {
+        display: flex;
+        gap: 30px;
+        flex-wrap: wrap;
+        margin-top: 38px;
+        padding-top: 24px;
+        border-top: 1px solid rgba(255, 255, 255, .08);
+    }
+    .stats div { display: flex; flex-direction: column; gap: 4px; }
+    .stats b { font-size: 1.18rem; letter-spacing: -.02em; }
+    .stats span { color: var(--muted); font-size: .74rem; }
+    .hint { color: var(--muted); font-size: .76rem; line-height: 1.7; margin-top: 20px; }
+    .hint a { color: var(--accent); }
+
+    .preview { position: relative; }
+    .frame {
+        position: relative;
+        border-radius: 22px;
+        border: 1px solid rgba(255, 255, 255, .14);
+        background: rgba(255, 255, 255, .03);
+        padding: 10px;
+        box-shadow: 0 32px 90px rgba(0, 0, 0, .5), 0 0 0 1px rgba(255, 255, 255, .03) inset;
+        overflow: hidden;
+    }
+    .frame::before {
+        content: '';
+        position: absolute;
+        inset: -40%;
+        background: conic-gradient(from 120deg, rgba(80, 183, 254, .26), transparent 28%, rgba(124, 108, 255, .22) 55%, transparent 78%);
+        opacity: .7;
+        animation: spin 18s linear infinite;
+        pointer-events: none;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .frame img {
+        position: relative;
+        display: block;
+        width: 100%;
+        aspect-ratio: 4 / 3;
+        object-fit: cover;
+        border-radius: 15px;
+        background: #0b0d12;
+        cursor: zoom-in;
+        transition: opacity .22s ease, transform .35s ease;
+        z-index: 1;
+    }
+    .frame img.loading { opacity: .18; }
+    .frame img:hover { transform: scale(1.006); }
+    .placeholder {
+        position: relative;
+        z-index: 1;
+        width: 100%;
+        aspect-ratio: 4 / 3;
+        border-radius: 15px;
+        background:
+            radial-gradient(circle at 30% 20%, rgba(80, 183, 254, .14), transparent 45%),
+            radial-gradient(circle at 75% 75%, rgba(124, 108, 255, .12), transparent 45%),
+            #0b0d12;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        color: var(--muted);
+        text-align: center;
+        padding: 24px;
+    }
+    .placeholder .ph-icon { font-size: 2.4rem; opacity: .7; }
+    .placeholder p { font-size: .86rem; line-height: 1.7; max-width: 300px; }
+    .placeholder a { color: var(--accent); }
+    .frame-actions {
+        position: absolute;
+        right: 22px;
+        bottom: 22px;
+        z-index: 2;
+    }
+    .shuffle {
+        font: inherit;
+        font-size: .82rem;
+        color: #fff;
+        background: rgba(12, 15, 22, .62);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, .18);
+        border-radius: 10px;
+        padding: 9px 14px;
+        cursor: pointer;
+        transition: .18s;
+    }
+    .shuffle:hover { background: rgba(80, 183, 254, .82); border-color: transparent; }
+    .shuffle:disabled { opacity: .5; cursor: wait; }
+    .caption {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        color: var(--muted);
+        font-size: .75rem;
+        padding: 12px 8px 0;
+        min-height: 1.4em;
+    }
+    #imageTags { color: var(--accent); text-align: right; word-break: break-all; }
+
+    footer {
+        display: flex;
+        justify-content: space-between;
+        gap: 14px;
+        flex-wrap: wrap;
+        color: var(--muted);
+        font-size: .74rem;
+        padding: 16px 0 28px;
+        border-top: 1px solid rgba(255, 255, 255, .06);
+    }
+    footer a { color: var(--accent); }
+
+    @media (max-width: 900px) {
+        .hero { grid-template-columns: 1fr; min-height: 0; padding-top: 24px; }
+        .copy { max-width: none; }
+        .preview { order: 2; }
+        h1 { font-size: clamp(2rem, 8vw, 3rem); }
+        .frame img, .placeholder { aspect-ratio: 16 / 10; }
+    }
+    @media (max-width: 560px) {
+        .shell { width: calc(100% - 32px); }
+        header { padding-top: 18px; }
+        .stats { gap: 20px; }
+        .btn { flex: 1; }
+    }
+</style>
+</head>
+<body>
+<div class="shell">
+    <header>
+        <a class="brand" href="/" id="brandLink">🖼️ <span id="siteName">梦星的小图床</span></a>
+        <nav>
+            <span class="nav-user" id="navUser" hidden></span>
+            <a href="/login" id="loginLink">登录</a>
+            <a href="/register" id="registerLink" class="primary">注册</a>
+            <a href="/admin" id="adminLink" hidden>进入后台</a>
+            <button type="button" id="logoutBtn" hidden>退出</button>
+        </nav>
+    </header>
+
+    <main class="hero">
+        <section class="copy">
+            <p class="eyebrow">Self-hosted · Random Image API</p>
+            <h1>把喜欢的图，<br>变成<span>随手可用的随机图源。</span></h1>
+            <p class="lead">
+                上传原图，自动生成 WebP 副本。一个随机接口就能给壁纸、
+                博客背景和第三方站点供图；支持标签、评级和多种尺寸参数。
+            </p>
+
+            <div class="actions">
+                <a class="btn primary" href="/register" id="primaryAction">创建账户</a>
+                <a class="btn ghost" href="/login" id="secondaryAction">登录</a>
+            </div>
+
+            <div class="stats">
+                <div><b id="statCount">-</b><span>图库图片</span></div>
+            </div>
+
+            <p class="hint" id="userHint">公开首页，无需登录即可浏览随机图。</p>
+        </section>
+
+        <section class="preview">
+            <div class="frame">
+                <img id="randomImage" alt="随机图片" hidden>
+                <div class="placeholder" id="placeholder">
+                    <div class="ph-icon">🖼️</div>
+                    <p id="placeholderText">正在从图库取一张随机图片…</p>
+                </div>
+                <div class="frame-actions">
+                    <button type="button" class="shuffle" id="shuffleBtn">换一张</button>
+                </div>
+            </div>
+            <div class="caption">
+                <span id="imageMeta">点击图片或「换一张」刷新</span>
+                <span id="imageTags"></span>
+            </div>
+        </section>
+    </main>
+</div>
+
+<script>
+    const BASE = location.pathname.replace(/\/+$/, '').replace(/\/index\.html$/, '');
+    const API = BASE + '/admin/api';
+
+    document.getElementById('brandLink').href = BASE + '/';
+    document.getElementById('loginLink').href = BASE + '/login';
+    document.getElementById('registerLink').href = BASE + '/register';
+    document.getElementById('adminLink').href = BASE + '/admin';
+    document.getElementById('primaryAction').href = BASE + '/register';
+    document.getElementById('secondaryAction').href = BASE + '/login';
+
+    const $ = (id) => document.getElementById(id);
+    const image = $('randomImage');
+    const placeholder = $('placeholder');
+    const placeholderText = $('placeholderText');
+    const shuffleBtn = $('shuffleBtn');
+    let allowRegistration = true;
+    let galleryCount = null;
+    let tagsEnabled = false;
+
+    const applySiteName = (name) => {
+        const value = String(name || '').trim() || '梦星的小图床';
+        $('siteName').textContent = value;
+        document.title = value + ' · 随机图床';
+    };
+
+    const setPlaceholder = (text) => {
+        image.hidden = true;
+        image.removeAttribute('src');
+        placeholder.hidden = false;
+        placeholderText.innerHTML = text;
+        $('imageMeta').textContent = '';
+        $('imageTags').textContent = '';
+    };
+
+    const loadRandom = async () => {
+        shuffleBtn.disabled = true;
+        image.classList.add('loading');
+
+        try {
+            const response = await fetch(BASE + '/random?format=json&_=' + Date.now(), { cache: 'no-store' });
+
+            if (response.status === 404) {
+                setPlaceholder('图库还是空的。登录后进入后台上传第一张图片吧。');
+                return;
+            }
+            if (!response.ok) throw new Error('随机接口返回 ' + response.status);
+
+            const data = await response.json();
+            const src = data.url || data.webp || data.origin;
+            if (!src) throw new Error('随机接口没有返回图片地址');
+
+            const next = new Image();
+            next.onload = () => {
+                image.src = src;
+                image.hidden = false;
+                image.classList.remove('loading');
+                placeholder.hidden = true;
+
+                const tags = Array.isArray(data.tags) ? data.tags : [];
+                const rating = data.rating ? String(data.rating).toUpperCase() : '';
+                $('imageMeta').textContent = [data.width + ' × ' + data.height, rating].filter(Boolean).join(' · ');
+                $('imageTags').textContent = tagsEnabled && tags.length ? '#' + tags.join(' #') : '';
+                shuffleBtn.disabled = false;
+            };
+            next.onerror = () => {
+                setPlaceholder('图片加载失败，请稍后再试。');
+                shuffleBtn.disabled = false;
+            };
+            next.src = src;
+        } catch (error) {
+            setPlaceholder('暂时没有取到图片：' + error.message);
+            shuffleBtn.disabled = false;
+        }
+    };
+
+    const loadStats = async () => {
+        try {
+            const response = await fetch(BASE + '/stats', { cache: 'no-store' });
+            if (!response.ok) return false;
+            const data = await response.json();
+            galleryCount = Number(data.count ?? 0);
+            tagsEnabled = Boolean(data.enableTags);
+            if (data.siteName) applySiteName(data.siteName);
+            $('statCount').textContent = String(galleryCount);
+            return true;
+        } catch {
+            return false;
+        }
+    };
+
+    const applyGuest = () => {
+        $('navUser').hidden = true;
+        $('loginLink').hidden = false;
+        $('registerLink').hidden = !allowRegistration;
+        $('adminLink').hidden = true;
+        $('logoutBtn').hidden = true;
+
+        $('primaryAction').hidden = false;
+        $('primaryAction').href = allowRegistration ? BASE + '/register' : BASE + '/login';
+        $('primaryAction').textContent = allowRegistration ? '创建账户' : '登录';
+        $('secondaryAction').hidden = !allowRegistration;
+        $('secondaryAction').href = BASE + '/login';
+        $('secondaryAction').textContent = '登录';
+        $('userHint').innerHTML = '公开首页，无需登录即可浏览随机图。';
+    };
+
+    const applyUser = (user) => {
+        const name = user.displayName || user.username;
+        $('navUser').hidden = false;
+        $('navUser').innerHTML = '已登录 · <b>' + escapeHtml(name) + '</b>';
+        $('loginLink').hidden = true;
+        $('registerLink').hidden = true;
+        $('adminLink').hidden = false;
+        $('logoutBtn').hidden = false;
+
+        $('primaryAction').hidden = false;
+        $('primaryAction').href = BASE + '/admin';
+        $('primaryAction').textContent = '进入后台';
+        $('secondaryAction').hidden = user.role !== 'admin';
+        if (user.role === 'admin') {
+            $('secondaryAction').href = BASE + '/admin/setting';
+            $('secondaryAction').textContent = '账户设置';
+        }
+        $('userHint').innerHTML = user.role === 'admin'
+            ? '已登录，可进入后台管理图片、账户和全局设置。'
+            : '已登录，可进入后台上传和管理自己的图片。';
+    };
+
+    const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (ch) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[ch]));
+
+    const loadAuth = async () => {
+        try {
+            const response = await fetch(API + '/auth/status', { cache: 'no-store', credentials: 'same-origin' });
+            const data = await response.json();
+            allowRegistration = data.allowRegistration !== false;
+            if (data.siteName) applySiteName(data.siteName);
+
+            if (data.authenticated && data.user) {
+                applyUser(data.user);
+            } else {
+                applyGuest();
+            }
+        } catch {
+            applyGuest();
+        }
+    };
+
+    image.addEventListener('click', () => loadRandom());
+    shuffleBtn.addEventListener('click', () => loadRandom());
+
+    $('logoutBtn').addEventListener('click', async () => {
+        try {
+            await fetch(API + '/auth/logout', { method: 'POST', credentials: 'same-origin' });
+        } finally {
+            location.reload();
+        }
+    });
+
+    const boot = async () => {
+        loadAuth();
+        const statsOk = await loadStats();
+
+        if (statsOk && galleryCount === 0) {
+            setPlaceholder('图库还是空的。登录后进入后台上传第一张图片吧。');
+            return;
+        }
+
+        loadRandom();
+    };
+
+    boot();
+</script>
+</body>
+</html>
