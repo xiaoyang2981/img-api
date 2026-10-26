@@ -1,0 +1,9 @@
+# 统一使用 LF，仓库会被部署到 Linux
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.gif binary
+*.avif binary

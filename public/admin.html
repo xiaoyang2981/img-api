@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>图床后台</title>
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+        --bg: #12141a;
+        --panel: rgba(255, 255, 255, 0.05);
+        --panel-hover: rgba(255, 255, 255, 0.08);
+        --border: rgba(255, 255, 255, 0.12);
+        --text: #e8ebf2;
+        --muted: #8b93a7;
+        --accent: #50b7fe;
+        --danger: #e74c3c;
+        --ok: #2ecc71;
+    }
+    body {
+        background: radial-gradient(1200px 600px at 20% -10%, #1b2740 0%, var(--bg) 55%);
+        color: var(--text);
+        font-family: 'Segoe UI', 'Microsoft YaHei', -apple-system, sans-serif;
+        min-height: 100vh;
+        padding: 24px;
+    }
+    a { color: var(--accent); text-decoration: none; }
+    .wrap { max-width: 1280px; margin: 0 auto; }
+    header {
+        display: flex; align-items: center; justify-content: space-between;
+        gap: 16px; flex-wrap: wrap; margin-bottom: 22px;
+    }
+    h1 { font-size: 1.35rem; font-weight: 700; }
+    h1 span { color: var(--accent); }
+    .token-state { font-size: .82rem; color: var(--muted); }
+    .token-state b { color: var(--ok); }
+    .panel {
+        background: var(--panel); border: 1px solid var(--border);
+        border-radius: 14px; padding: 18px; margin-bottom: 20px;
+    }
+    .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+    .dropzone {
+        border: 2px dashed var(--border); border-radius: 14px;
+        padding: 34px 18px; text-align: center; cursor: pointer;
+        transition: .2s; margin-bottom: 14px;
+    }
+    .dropzone:hover, .dropzone.over { border-color: var(--accent); background: rgba(80, 183, 254, .07); }
+    .dropzone .big { font-size: 1.6rem; margin-bottom: 6px; }
+    .dropzone .hint { color: var(--muted); font-size: .86rem; }
+    input[type=text], input[type=password], input[type=number], select, textarea {
+        background: rgba(0, 0, 0, .25); color: var(--text);
+        border: 1px solid var(--border); border-radius: 9px;
+        padding: 9px 12px; font-size: .88rem; outline: none;
+        font-family: inherit;
+    }
+    input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+    button {
+        background: linear-gradient(45deg, #50b7fe, #3aa7fe); color: #fff;
+        border: none; border-radius: 9px; padding: 9px 16px;
+        font-size: .88rem; cursor: pointer; font-family: inherit;
+        transition: .15s;
+    }
+    button:hover { filter: brightness(1.1); }
+    button:disabled { opacity: .5; cursor: not-allowed; }
+    button.ghost {
+        background: var(--panel); border: 1px solid var(--border); color: var(--text);
+    }
+    button.ghost:hover { background: var(--panel-hover); }
+    button.mini { padding: 5px 10px; font-size: .78rem; border-radius: 7px; }
+    button.danger { background: rgba(231, 76, 60, .16); border: 1px solid rgba(231, 76, 60, .4); color: #ff8d80; }
+    .progress { height: 6px; background: rgba(255,255,255,.08); border-radius: 99px; overflow: hidden; margin-top: 12px; display: none; }
+    .progress.on { display: block; }
+    .progress > i { display: block; height: 100%; width: 0%; background: var(--accent); transition: width .2s; }
+    .toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+    .toolbar .left, .toolbar .right { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    .count { color: var(--muted); font-size: .84rem; }
+    .grid {
+        display: grid; gap: 14px;
+        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    }
+    .card {
+        background: var(--panel); border: 1px solid var(--border);
+        border-radius: 12px; overflow: hidden; display: flex; flex-direction: column;
+    }
+    .card .thumb {
+        aspect-ratio: 16 / 10; background: #0b0d12 center/cover no-repeat;
+        display: block; width: 100%;
+    }
+    .card .body { padding: 10px 12px; display: flex; flex-direction: column; gap: 7px; }
+    .card .meta { font-size: .76rem; color: var(--muted); display: flex; gap: 8px; flex-wrap: wrap; }
+    .badge {
+        display: inline-block; padding: 1px 7px; border-radius: 99px;
+        font-size: .7rem; letter-spacing: .02em;
+    }
+    .badge.sfw { background: rgba(46, 204, 113, .16); color: #6ee7a4; }
+    .badge.questionable { background: rgba(241, 196, 15, .16); color: #ffd75e; }
+    .badge.nsfw { background: rgba(231, 76, 60, .18); color: #ff8d80; }
+    .tags { font-size: .74rem; color: var(--accent); line-height: 1.5; word-break: break-all; }
+    .actions { display: flex; gap: 6px; flex-wrap: wrap; }
+    .empty { text-align: center; color: var(--muted); padding: 46px 10px; }
+    .pager { display: flex; gap: 10px; justify-content: center; align-items: center; margin-top: 22px; }
+    .pager .info { color: var(--muted); font-size: .84rem; }
+    /* 登录遮罩 */
+    .overlay {
+        position: fixed; inset: 0; background: rgba(6, 8, 12, .82);
+        backdrop-filter: blur(4px); display: none; align-items: center; justify-content: center;
+        padding: 20px; z-index: 50;
+    }
+    .overlay.on { display: flex; }
+    .dialog {
+        background: #171a22; border: 1px solid var(--border); border-radius: 16px;
+        padding: 24px; width: min(440px, 100%);
+    }
+    .dialog h2 { font-size: 1.05rem; margin-bottom: 8px; }
+    .dialog p { color: var(--muted); font-size: .84rem; line-height: 1.7; margin-bottom: 14px; }
+    .dialog input { width: 100%; margin-bottom: 14px; }
+    .dialog .row { justify-content: flex-end; }
+    .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+    .field label { font-size: .8rem; color: var(--muted); }
+    .toast {
+        position: fixed; left: 50%; bottom: 32px; transform: translate(-50%, 20px);
+        background: #1e2430; border: 1px solid var(--border); color: var(--text);
+        padding: 10px 18px; border-radius: 10px; font-size: .86rem;
+        opacity: 0; pointer-events: none; transition: .25s; z-index: 80;
+    }
+    .toast.on { opacity: 1; transform: translate(-50%, 0); }
+    .toast.err { border-color: rgba(231,76,60,.5); color: #ff9d92; }
+    code { background: rgba(255,255,255,.07); padding: 1px 6px; border-radius: 5px; font-size: .82em; }
+</style>
+</head>
+<body>
+<div class="wrap">
+    <header>
+        <h1>🖼️ 图床后台 <span>·</span> <a href="setting" class="mini">设置</a></h1>
+        <div class="token-state" id="tokenState">未登录</div>
+    </header>
+
+    <div class="panel">
+        <div class="dropzone" id="dropzone">
+            <div class="big">📤</div>
+            <div>把图片拖到这里，或点击选择文件</div>
+            <div class="hint">支持 PNG / JPG / WebP / GIF / AVIF，可多选；上传后自动生成 WebP 副本</div>
+            <input type="file" id="fileInput" accept="image/png,image/jpeg,image/webp,image/gif,image/avif" multiple hidden>
+        </div>
+        <div class="row" id="uploadMeta">
+            <input type="text" id="tags" placeholder="标签，逗号分隔：wolf,dragon" style="flex:2;min-width:200px;" hidden>
+            <select id="rating">
+                <option value="sfw">SFW</option>
+                <option value="questionable">Questionable</option>
+                <option value="nsfw">NSFW</option>
+            </select>
+            <input type="text" id="title" placeholder="标题（可选）" style="flex:2;min-width:180px;">
+            <input type="text" id="source" placeholder="来源 / 画师链接（可选）" style="flex:2;min-width:180px;">
+        </div>
+        <div class="progress" id="progress"><i></i></div>
+    </div>
+
+    <div class="toolbar">
+        <div class="left">
+            <input type="text" id="search" placeholder="搜索 id / 标签 / 标题…" style="min-width:240px;">
+            <button class="ghost" id="refreshBtn">刷新</button>
+            <button class="ghost" id="scanBtn" title="把 data/images 里手动丢进去的图片补进索引">扫描目录</button>
+        </div>
+        <div class="right">
+            <span class="count" id="count"></span>
+            <button class="ghost" id="logoutBtn">退出令牌</button>
+        </div>
+    </div>
+
+    <div class="grid" id="grid"></div>
+    <div class="pager" id="pager"></div>
+</div>
+
+<!-- 登录 -->
+<div class="overlay" id="loginOverlay">
+    <div class="dialog">
+        <h2>需要管理令牌</h2>
+        <p>令牌在服务启动时打印在控制台，也保存在 <code>data/config.json</code> 的 <code>adminToken</code> 字段。</p>
+        <input type="password" id="tokenInput" placeholder="粘贴管理令牌" autocomplete="off">
+        <div class="row">
+            <button id="loginBtn">进入后台</button>
+        </div>
+    </div>
+</div>
+
+<!-- 编辑 -->
+<div class="overlay" id="editOverlay">
+    <div class="dialog">
+        <h2>编辑图片信息</h2>
+        <input type="hidden" id="editId">
+        <div class="field">
+            <label>标签（逗号分隔）</label>
+            <input type="text" id="editTags" placeholder="wolf, dragon, artist-name">
+        </div>
+        <div class="field">
+            <label>评级</label>
+            <select id="editRating">
+                <option value="sfw">SFW</option>
+                <option value="questionable">Questionable</option>
+                <option value="nsfw">NSFW</option>
+            </select>
+        </div>
+        <div class="field">
+            <label>标题</label>
+            <input type="text" id="editTitle">
+        </div>
+        <div class="field">
+            <label>来源 / 画师链接</label>
+            <input type="text" id="editSource">
+        </div>
+        <div class="row">
+            <button class="ghost" id="editCancel">取消</button>
+            <button id="editSave">保存</button>
+        </div>
+    </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+    const BASE = location.pathname.replace(/\/admin(\/.*)?$/, '');
+    const API = BASE + '/admin/api';
+    const RANDOM_URL = location.origin + BASE + '/random';
+
+    let token = localStorage.getItem('imgapi_token') || '';
+    let page = 1;
+    let search = '';
+    let enableTags = false;
+
+    const $ = (id) => document.getElementById(id);
+    const grid = $('grid');
+    const pager = $('pager');
+
+    const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (ch) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[ch]));
+
+    const fmtSize = (bytes) => {
+        if (!bytes) return '0 B';
+        if (bytes < 1024) return bytes + ' B';
+        if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(0) + ' KB';
+        return (bytes / 1024 / 1024).toFixed(1) + ' MB';
+    };
+
+    let toastTimer = null;
+    const toast = (message, isError = false) => {
+        const el = $('toast');
+        el.textContent = message;
+        el.className = 'toast on' + (isError ? ' err' : '');
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => { el.className = 'toast'; }, 2400);
+    };
+
+    const request = async (path, options = {}) => {
+        const headers = Object.assign({}, options.headers || {});
+        if (token) headers['Authorization'] = 'Bearer ' + token;
+        if (options.json !== undefined) {
+            headers['Content-Type'] = 'application/json';
+            options.body = JSON.stringify(options.json);
+        }
+        const response = await fetch(API + path, Object.assign({}, options, { headers }));
+        if (response.status === 401) {
+            showLogin();
+            throw new Error('令牌无效或已过期');
+        }
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.message || ('请求失败 ' + response.status));
+        return data;
+    };
+
+    const showLogin = () => {
+        $('loginOverlay').classList.add('on');
+        $('tokenInput').value = '';
+        $('tokenInput').focus();
+    };
+
+    const copy = async (text) => {
+        try {
+            await navigator.clipboard.writeText(text);
+            toast('已复制：' + text);
+        } catch {
+            toast('复制失败，请手动复制：' + text, true);
+        }
+    };
+
+    const badges = (image) => {
+        const cls = image.rating || 'sfw';
+        return '<span class="badge ' + cls + '">' + cls.toUpperCase() + '</span>';
+    };
+
+    const renderCards = (images) => {
+        if (!images.length) {
+            grid.innerHTML = '<div class="empty">还没有图片，先把壁纸拖进上面的框里 🐾</div>';
+            return;
+        }
+
+        grid.innerHTML = images.map((image) => {
+            const thumb = image.webpUrl || image.url;
+            const tags = (image.tags || []).join(', ');
+            return '<div class="card">' +
+                '<img class="thumb" loading="lazy" src="' + esc(thumb) + '" alt="' + esc(image.id) + '" ' +
+                    'onclick="window.open(\'' + esc(image.url) + '\',\'_blank\')">' +
+                '<div class="body">' +
+                    '<div class="meta">' + badges(image) +
+                        '<span>' + image.width + '×' + image.height + '</span>' +
+                        '<span>' + fmtSize(image.size) + '</span>' +
+                        (image.webpSize ? '<span>webp ' + fmtSize(image.webpSize) + '</span>' : '<span>无 webp</span>') +
+                    '</div>' +
+                    (tags ? '<div class="tags">#' + esc(tags) + '</div>' : '') +
+                    '<div class="actions">' +
+                        '<button class="mini ghost" data-copy="' + esc(image.url) + '">原图</button>' +
+                        (image.webpUrl ? '<button class="mini ghost" data-copy="' + esc(image.webpUrl) + '">WebP</button>' : '') +
+                        '<button class="mini ghost" data-edit="' + esc(image.id) + '">编辑</button>' +
+                        '<button class="mini danger" data-del="' + esc(image.id) + '">删除</button>' +
+                    '</div>' +
+                '</div>' +
+            '</div>';
+        }).join('');
+    };
+
+    let currentImages = [];
+
+    const load = async () => {
+        try {
+            const data = await request('/images?page=' + page + '&pageSize=24&q=' + encodeURIComponent(search));
+            currentImages = data.images;
+            $('count').textContent = '共 ' + data.total + ' 张 · 原图 ' + fmtSize(data.stats.totalSize) +
+                ' · webp ' + fmtSize(data.stats.webpSize);
+            $('tokenState').innerHTML = '已连接 · 令牌 <b>' + esc(token.slice(0, 6)) + '•••</b>';
+            renderCards(data.images);
+            renderPager(data);
+        } catch (error) {
+            if (token) toast(error.message, true);
+        }
+    };
+
+    const renderPager = (data) => {
+        if (data.pages <= 1) { pager.innerHTML = ''; return; }
+        pager.innerHTML =
+            '<button class="ghost mini" id="prevBtn" ' + (data.page <= 1 ? 'disabled' : '') + '>上一页</button>' +
+            '<span class="info">' + data.page + ' / ' + data.pages + '</span>' +
+            '<button class="ghost mini" id="nextBtn" ' + (data.page >= data.pages ? 'disabled' : '') + '>下一页</button>';
+        $('prevBtn').onclick = () => { page = Math.max(1, page - 1); load(); };
+        $('nextBtn').onclick = () => { page = Math.min(data.pages, page + 1); load(); };
+    };
+
+    const uploadFiles = async (files) => {
+        if (!files.length) return;
+
+        const form = new FormData();
+        for (const file of files) form.append('file', file);
+        form.append('tags', $('tags').hidden ? '' : $('tags').value);
+        form.append('rating', $('rating').value);
+        form.append('title', $('title').value);
+        form.append('source', $('source').value);
+
+        const bar = $('progress');
+        bar.classList.add('on');
+        bar.firstElementChild.style.width = '15%';
+
+        try {
+            const response = await fetch(API + '/upload', {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + token },
+                body: form
+            });
+
+            if (response.status === 401) { showLogin(); throw new Error('令牌无效'); }
+
+            bar.firstElementChild.style.width = '80%';
+            const data = await response.json();
+            const okCount = (data.results || []).length;
+            const dup = (data.results || []).filter((item) => item.duplicate).length;
+            const failed = (data.errors || []).length;
+
+            if (okCount) {
+                toast('上传成功 ' + okCount + ' 张' + (dup ? '（其中 ' + dup + ' 张重复已跳过）' : '') +
+                    (failed ? '，失败 ' + failed + ' 张' : ''));
+                page = 1;
+                await load();
+                $('title').value = '';
+                $('source').value = '';
+            } else {
+                throw new Error((data.errors && data.errors[0] && data.errors[0].message) || data.message || '上传失败');
+            }
+        } catch (error) {
+            toast(error.message, true);
+        } finally {
+            bar.firstElementChild.style.width = '100%';
+            setTimeout(() => { bar.classList.remove('on'); bar.firstElementChild.style.width = '0%'; }, 400);
+        }
+    };
+
+    // —— 事件 ——
+    $('dropzone').onclick = () => $('fileInput').click();
+    $('fileInput').onchange = (event) => {
+        uploadFiles([...event.target.files]);
+        event.target.value = '';
+    };
+
+    ['dragenter', 'dragover'].forEach((type) => {
+        $('dropzone').addEventListener(type, (event) => {
+            event.preventDefault();
+            $('dropzone').classList.add('over');
+        });
+    });
+
+    ['dragleave', 'drop'].forEach((type) => {
+        $('dropzone').addEventListener(type, (event) => {
+            event.preventDefault();
+            $('dropzone').classList.remove('over');
+        });
+    });
+
+    $('dropzone').addEventListener('drop', (event) => {
+        uploadFiles([...event.dataTransfer.files].filter((file) => file.type.startsWith('image/')));
+    });
+
+    grid.addEventListener('click', async (event) => {
+        const target = event.target;
+        if (target.dataset.copy) return copy(target.dataset.copy);
+
+        if (target.dataset.edit) {
+            const image = currentImages.find((item) => item.id === target.dataset.edit);
+            if (!image) return;
+            $('editId').value = image.id;
+            $('editTags').value = (image.tags || []).join(', ');
+            $('editRating').value = image.rating || 'sfw';
+            $('editTitle').value = image.title || '';
+            $('editSource').value = image.source || '';
+            $('editOverlay').classList.add('on');
+            return;
+        }
+
+        if (target.dataset.del) {
+            const id = target.dataset.del;
+            if (!confirm('确定删除 ' + id + ' ？原图和 webp 都会被删掉。')) return;
+            try {
+                await request('/images/' + id, { method: 'DELETE' });
+                toast('已删除');
+                await load();
+            } catch (error) {
+                toast(error.message, true);
+            }
+        }
+    });
+
+    $('search').addEventListener('input', () => {
+        clearTimeout(window.__searchTimer);
+        window.__searchTimer = setTimeout(() => {
+            search = $('search').value.trim();
+            page = 1;
+            load();
+        }, 300);
+    });
+
+    $('refreshBtn').onclick = () => load();
+
+    $('scanBtn').onclick = async () => {
+        try {
+            toast('正在扫描 data/images …');
+            const data = await request('/scan', { method: 'POST' });
+            toast('扫描完成：新增 ' + data.added + ' 张，跳过 ' + data.skipped + ' 个');
+            await load();
+        } catch (error) {
+            toast(error.message, true);
+        }
+    };
+
+    $('logoutBtn').onclick = () => {
+        localStorage.removeItem('imgapi_token');
+        token = '';
+        grid.innerHTML = '';
+        $('tokenState').textContent = '未登录';
+        showLogin();
+    };
+
+    $('loginBtn').onclick = async () => {
+        const value = $('tokenInput').value.trim();
+        if (!value) return;
+        token = value;
+        try {
+            const settings = await request('/settings');
+            localStorage.setItem('imgapi_token', token);
+            $('loginOverlay').classList.remove('on');
+            applySettings(settings);
+            await load();
+            toast('已进入后台');
+        } catch (error) {
+            token = '';
+            toast(error.message, true);
+        }
+    };
+
+    $('tokenInput').addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') $('loginBtn').click();
+    });
+
+    $('editCancel').onclick = () => $('editOverlay').classList.remove('on');
+
+    $('editSave').onclick = async () => {
+        const id = $('editId').value;
+        try {
+            await request('/images/' + id, {
+                method: 'PATCH',
+                json: {
+                    tags: $('editTags').value,
+                    rating: $('editRating').value,
+                    title: $('editTitle').value,
+                    source: $('editSource').value
+                }
+            });
+            $('editOverlay').classList.remove('on');
+            toast('已保存');
+            await load();
+        } catch (error) {
+            toast(error.message, true);
+        }
+    };
+
+    const applySettings = (settings) => {
+        enableTags = !!settings.enableTags;
+        $('tags').hidden = !enableTags;
+    };
+
+    const boot = async () => {
+        if (!token) { showLogin(); return; }
+        try {
+            const settings = await request('/settings');
+            applySettings(settings);
+            await load();
+        } catch {
+            showLogin();
+        }
+    };
+
+    boot();
+</script>
+</body>
+</html>

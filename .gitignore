@@ -1,0 +1,10 @@
+node_modules/
+
+# 运行时数据：图片和索引不纳入版本管理
+data/config.json
+data/index.json
+data/index.json.tmp
+data/images/*
+data/webp/*
+!data/images/.gitkeep
+!data/webp/.gitkeep
