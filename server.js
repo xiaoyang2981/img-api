@@ -9,6 +9,7 @@ import { closeDb, countUsers } from './lib/db.js';
 import { DB_FILE } from './lib/paths.js';
 import { serveAsset, servePage } from './lib/pages.js';
 import { loadIndex } from './lib/index.js';
+import { rateLimit } from './lib/rate-limit.js';
 import { adminRoutes } from './routes/admin.js';
 import {
     apiV1Handler,
@@ -29,14 +30,14 @@ app.use('*', cors());
 app.use('*', logger());
 
 // —— 公开接口 ——
-app.get('/random', randomHandler);
-app.get('/api/v1', apiV1Handler);
-app.get('/api/v1/', apiV1Handler);
-app.get('/api/v1.png', apiV1PngHandler);
-app.get('/api/v1/random.png', apiV1PngHandler);
+app.get('/random', rateLimit, randomHandler);
+app.get('/api/v1', rateLimit, apiV1Handler);
+app.get('/api/v1/', rateLimit, apiV1Handler);
+app.get('/api/v1.png', rateLimit, apiV1PngHandler);
+app.get('/api/v1/random.png', rateLimit, apiV1PngHandler);
 app.get('/i/:name', imageHandler);
 app.get('/w/:name', webpHandler);
-app.get('/list', listHandler);
+app.get('/list', rateLimit, listHandler);
 app.get('/info/:id', infoHandler);
 app.get('/stats', statsHandler);
 app.get('/health', healthHandler);

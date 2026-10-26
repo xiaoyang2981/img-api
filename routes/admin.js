@@ -80,6 +80,8 @@ const settingPayload = (user) => {
         emailConfigured: isMailConfigured(config),
         canEditEmail: user?.role === 'owner',
         maxUploadMB: config.maxUploadMB,
+        rateLimitGuest: config.rateLimitGuest,
+        rateLimitUser: config.rateLimitUser,
         canEditPort: user?.role === 'owner'
     };
 };
@@ -118,6 +120,7 @@ const profilePayload = (user) => {
     return {
         user: {
             ...publicUser(user),
+            apiToken: user.apiToken || null,
             createdAt: user.createdAt,
             updatedAt: user.updatedAt
         },

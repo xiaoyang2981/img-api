@@ -55,6 +55,14 @@
     .code-row { display: flex; gap: 8px; align-items: stretch; }
     .code-row input { flex: 1; min-width: 0; }
     .code-row button { flex: none; white-space: nowrap; }
+    .token-line { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .token-line code {
+        flex: 1; min-width: 220px; padding: 10px 12px; border-radius: 9px;
+        border: 1px solid var(--border); background: rgba(0,0,0,.25);
+        color: var(--text); font-family: 'Cascadia Code', Consolas, monospace;
+        font-size: .76rem; line-height: 1.6; word-break: break-all;
+    }
+    .token-line button { flex: none; }
     .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
     button {
         background: linear-gradient(45deg, #50b7fe, #3aa7fe); color: #fff; border: none;
@@ -77,12 +85,18 @@
     html[data-theme="light"] .status.ok { color: #15803d; background: #ecfdf3; border-color: rgba(21,128,61,.35); }
     html[data-theme="light"] .status.warn { color: #a16207; background: #fffbeb; border-color: rgba(161,98,7,.35); }
     html[data-theme="light"] .notice { color: #9a5b00; }
+    html[data-theme="light"] .token-line code {
+        background: #f8fafc; border-color: rgba(16, 24, 40, .14); color: #1b2436;
+    }
     @media (max-width: 600px) {
         body { padding: 14px; }
         .panel { padding: 16px; }
         .identity-panel { padding: 16px; }
         .code-row { flex-direction: column; }
         .code-row button { width: 100%; }
+        .token-line { align-items: stretch; }
+        .token-line code { width: 100%; flex: none; }
+        .token-line button { width: 100%; }
         .row button { width: 100%; }
     }
 </style>
@@ -127,6 +141,19 @@
         <div class="row">
             <button id="saveProfileBtn">保存资料</button>
         </div>
+    </section>
+
+    <section class="panel">
+        <div class="section-head">
+            <h2>API Token</h2>
+            <span class="status" id="tokenStatus">已生成</span>
+        </div>
+        <p class="hint">用于访问 <code>/random</code>、<code>/api/v1</code>、<code>/list</code> 等接口。携带有效 Token 后按注册用户速率统计。</p>
+        <div class="token-line">
+            <code id="apiToken">…</code>
+            <button type="button" class="ghost" id="copyTokenBtn">复制</button>
+        </div>
+        <p class="field-help">可以放在 <code>Authorization: Bearer &lt;token&gt;</code>、<code>X-API-Token</code> 或 <code>?token=...</code> 中。请勿公开分享。</p>
     </section>
 
     <section class="panel" id="emailPanel">
@@ -264,6 +291,12 @@
         $('roleBadge').className = 'badge ' + role;
         $('accountMeta').textContent = '@' + user.username + ' · ' + roleText + ' · 加入于 ' + fmtDate(user.createdAt);
         $('usernameText').textContent = user.username;
+
+        const apiToken = user.apiToken || '';
+        $('apiToken').textContent = apiToken || '未生成';
+        $('tokenStatus').textContent = apiToken ? '已生成' : '未生成';
+        $('tokenStatus').className = 'status ' + (apiToken ? 'ok' : 'warn');
+        $('copyTokenBtn').disabled = !apiToken;
 
         $('workspaceLink').href = BASE + (role === 'moderator' ? '/admin/review' : '/admin');
         $('workspaceLink').textContent = role === 'moderator' ? '返回审核台' : '返回后台';
@@ -484,6 +517,44 @@
             toast('密码已修改，其他设备已退出登录');
         } catch (error) {
             toast(error.message, true);
+        }
+    };
+
+    $('copyTokenBtn').onclick = async () => {
+        const token = state?.user?.apiToken;
+        if (!token) {
+            toast('API Token 尚未生成', true);
+            return;
+        }
+
+        const fallbackCopy = () => {
+            const textarea = document.createElement('textarea');
+            textarea.value = token;
+            textarea.setAttribute('readonly', '');
+            textarea.style.position = 'fixed';
+            textarea.style.top = '-1000px';
+            textarea.style.opacity = '0';
+            document.body.appendChild(textarea);
+            textarea.select();
+            const ok = document.execCommand('copy');
+            textarea.remove();
+            if (!ok) throw new Error('copy failed');
+        };
+
+        try {
+            if (navigator.clipboard?.writeText) {
+                try {
+                    await navigator.clipboard.writeText(token);
+                } catch {
+                    // HTTP 页面或浏览器不允许 Clipboard API 时回退到 execCommand
+                    fallbackCopy();
+                }
+            } else {
+                fallbackCopy();
+            }
+            toast('API Token 已复制');
+        } catch {
+            toast('复制失败，请手动选择 Token', true);
         }
     };
 

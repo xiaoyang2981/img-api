@@ -197,6 +197,28 @@
         </div>
     </div>
 
+    <div class="panel">
+        <h2>API 速率限制</h2>
+
+        <div class="item">
+            <div class="text">
+                <b>游客每分钟 GET 次数</b>
+                <span>按 IP 统计，适用于没有携带 Token、也没有登录的请求。</span>
+            </div>
+            <input type="number" id="rateLimitGuest" min="1" max="1000000">
+        </div>
+
+        <div class="item">
+            <div class="text">
+                <b>注册用户每分钟 GET 次数</b>
+                <span>按账户统计，携带有效 Token 或已登录会话时生效。</span>
+            </div>
+            <input type="number" id="rateLimitUser" min="1" max="1000000">
+        </div>
+
+        <p class="hint">统计窗口为 1 分钟；保存后立即生效。站长使用系统固定额度，不在此页显示。</p>
+    </div>
+
     <div class="panel" id="emailPanel" hidden>
         <h2>邮箱验证</h2>
 
@@ -357,6 +379,8 @@
         $('allowPublicList').checked = data.allowPublicList;
         $('allowRegistration').checked = data.allowRegistration;
         $('maxUploadMB').value = data.maxUploadMB;
+        $('rateLimitGuest').value = data.rateLimitGuest ?? 200;
+        $('rateLimitUser').value = data.rateLimitUser ?? 2000;
         $('port').value = data.port;
         $('port').disabled = data.canEditPort === false;
         $('portRestricted').hidden = data.canEditPort !== false;
@@ -412,6 +436,8 @@
                     smtpPass: $('smtpPass').value,
                     smtpFrom: $('smtpFrom').value.trim(),
                     maxUploadMB: Number($('maxUploadMB').value),
+                    rateLimitGuest: Number($('rateLimitGuest').value),
+                    rateLimitUser: Number($('rateLimitUser').value),
                     port: Number($('port').value)
                 }
             });

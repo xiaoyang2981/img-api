@@ -224,8 +224,9 @@ export const webpHandler = (c) => serve(c, WEBP_DIR, c.req.param('name'), 'image
 // GET /list?page=&pageSize=&q=&tag=&tagMode=any|all
 export const listHandler = async (c) => {
     const config = getConfig();
-    if (!config.allowPublicList && !getAuthUser(c)) {
-        return c.json({ error: true, message: '图片列表未公开，请先登录' }, 401);
+    const rateUser = c.get('rateUser');
+    if (!config.allowPublicList && !getAuthUser(c) && !rateUser) {
+        return c.json({ error: true, message: '图片列表未公开，请先登录或填写 Token' }, 401);
     }
 
     const page = Math.max(1, Number(c.req.query('page')) || 1);

@@ -61,6 +61,7 @@ $env:PORT=3000; node server.js
 - 首次绑定邮箱：验证码发送到新邮箱，验证后完成绑定
 - 修改已绑定邮箱：验证码发送到当前邮箱，确认后才能改成新邮箱
 - 修改密码：需要当前密码 + 当前邮箱验证码；成功后其他设备的登录会失效
+- 查看、复制账户的 API Token
 - 未绑定邮箱时不能修改密码，需要先绑定邮箱
 - 邮箱或密码修改需要 SMTP 已配置；未配置时页面会提示并暂时禁用相关操作
 - 站长/管理员在 `/admin/users` 为其他账户重置密码或设置邮箱；自己的邮箱和密码必须在个人信息页修改
@@ -119,10 +120,34 @@ SMTP 配置保存在 SQLite 的 `settings` 表；QQ/163 邮箱通常需要使用
 | `GET /api/v1.png` | 同上，URL 带 `.png` 后缀，兼容对扩展名敏感的客户端 |
 | `GET /i/{file}` | 原图，`Cache-Control: immutable` |
 | `GET /w/{file}` | WebP 版本 |
-| `GET /list?page=1&pageSize=40&q=&tag=&tagMode=` | 分页列表（默认需要登录） |
+| `GET /list?page=1&pageSize=40&q=&tag=&tagMode=` | 分页列表（默认需要登录或 API Token） |
 | `GET /info/{id}` | 单张图片信息 |
 | `GET /stats` | 数量与体积统计 |
 | `GET /health` | 健康检查 |
+
+### API 速率限制与 Token
+
+`/random`、`/api/v1`、`/api/v1.png`、`/api/v1/random.png`、`/list` 使用 60 秒窗口限流：
+
+| 身份 | 默认额度 | 统计方式 |
+|---|---:|---|
+| 游客 | 200 次/分钟 | 按 IP |
+| 注册用户 | 2000 次/分钟 | 按账户 |
+| 站长 | 2,000,000 次/分钟 | 按账户，固定额度 |
+
+- 每个账户在「个人信息」页有一个稳定、随机、非顺序的 **API Token**
+- 支持三种携带方式：
+  ```text
+  Authorization: Bearer img_xxxxxxxx
+  X-API-Token: img_xxxxxxxx
+  /random?token=img_xxxxxxxx
+  ```
+- 没带 Token 时：已登录会话按注册用户计算，否则按游客计算
+- 带错 Token 会直接返回 `401 Token 无效`
+- 速率超限返回 `429`，并带 `Retry-After`、`X-RateLimit-Limit`、`X-RateLimit-Remaining`、`X-RateLimit-Reset`
+- 游客和注册用户额度可在 `/admin/setting` 修改；站长固定额度不在设置页显示
+- 限流计数在内存中，服务重启后清零
+- `/i/{file}`、`/w/{file}` 是长期缓存的图片直链，不打限流，避免破坏外链；限流针对随机取图和列表接口
 
 登录接口（`/admin/api` 下）：
 
@@ -233,8 +258,10 @@ HMCL 支持网络背景图片，HTTP 和 HTTPS 都可以，**没有 HTTPS 不一
 1. 先用带 `.png` 后缀的地址，避开 WebP 和扩展名识别问题：
    ```text
    http://your-host:2618/api/v1.png
-   http://your-host:2618/api/v1?type=png
+   http://your-host:2618/api/v1.png?token=img_xxxxxxxx
+   http://your-host:2618/api/v1?type=png&token=img_xxxxxxxx
    ```
+   把 `img_xxxxxxxx` 换成「个人信息」页里的 API Token 可以使用注册用户速率；不带 Token 时按游客速率。
 2. 确认 HMCL 所在机器能访问该地址，并且端口没有被防火墙拦截。
 3. HMCL 默认会缓存网络背景图片，同一个 URL 可能一直使用第一次下载的图；如果一直不显示，可以关闭网络背景缓存，或换一个 URL 参数再试。
 4. 如果仍然失败，查看 HMCL 日志里是否有背景图片加载错误。
@@ -257,6 +284,8 @@ HMCL 支持网络背景图片，HTTP 和 HTTPS 都可以，**没有 HTTPS 不一
 | `smtpSecure` | `false` | SMTP 使用 SSL/TLS（仅站长可改） |
 | `smtpUser` | 空 | SMTP 用户名（仅站长可改） |
 | `smtpPass` | 空 | SMTP 密码/授权码，只保存不回传（仅站长可改） |
+| `rateLimitGuest` | `200` | 游客每分钟 GET 次数（按 IP） |
+| `rateLimitUser` | `2000` | 注册用户每分钟 GET 次数（按账户） |
 | `smtpFrom` | 空 | 发件地址（仅站长可改） |
 | `maxUploadMB` | `20` | 单张上限 |
 | `port` | `2618` | 端口（`PORT` 环境变量优先；仅站长可修改） |
