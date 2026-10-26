@@ -300,7 +300,7 @@
 
             <section class="doc-section" id="api">
                 <h2>API 接入</h2>
-                <p>API 地址以当前站点地址为前缀。以下示例中的 <span data-base-url>http://your-host:2618</span> 请替换为您实际访问的站点地址。</p>
+                <p>以下示例使用本机地址 <code>http://127.0.0.1:2618</code> 作为占位，仅用于说明接口格式。请在实际调用时替换为您的站点地址。</p>
                 <div class="table-wrap">
                     <table>
                         <tr><th>接口</th><th>用途</th><th>说明</th></tr>
@@ -348,23 +348,23 @@
                 <p>以下示例展示了常用参数组合。请将示例地址替换为当前站点地址。</p>
                 <div class="code-block">
                     <button type="button" class="copy-code">复制</button>
-                    <pre><code><span data-base-url>http://your-host:2618</span>/random?tag=wolf,dragon&tagMode=all&type=origin</code></pre>
+                    <pre><code>http://127.0.0.1:2618/random?tag=wolf,dragon&tagMode=all&type=origin</code></pre>
                 </div>
                 <div class="code-block">
                     <button type="button" class="copy-code">复制</button>
-                    <pre><code><span data-base-url>http://your-host:2618</span>/api/v1.png?tag=wolf&token=&lt;TOKEN&gt;</code></pre>
+                    <pre><code>http://127.0.0.1:2618/api/v1.png?tag=wolf&token=&lt;TOKEN&gt;</code></pre>
                 </div>
                 <div class="code-block">
                     <button type="button" class="copy-code">复制</button>
-                    <pre><code><span data-base-url>http://your-host:2618</span>/list?page=1&pageSize=20&tag=wolf&tagMode=any</code></pre>
+                    <pre><code>http://127.0.0.1:2618/list?page=1&pageSize=20&tag=wolf&tagMode=any</code></pre>
                 </div>
                 <div class="code-block">
                     <button type="button" class="copy-code">复制</button>
-                    <pre><code>&lt;img src="<span data-base-url>http://your-host:2618</span>/random?tag=wolf" alt="随机图片"&gt;</code></pre>
+                    <pre><code>&lt;img src="http://127.0.0.1:2618/random?tag=wolf" alt="随机图片"&gt;</code></pre>
                 </div>
                 <div class="code-block">
                     <button type="button" class="copy-code">复制</button>
-                    <pre><code>curl -H "Authorization: Bearer &lt;TOKEN&gt;" "<span data-base-url>http://your-host:2618</span>/random?format=json"</code></pre>
+                    <pre><code>curl -H "Authorization: Bearer &lt;TOKEN&gt;" "http://127.0.0.1:2618/random?format=json"</code></pre>
                 </div>
                 <div class="code-block">
                     <button type="button" class="copy-code">复制</button>
@@ -383,7 +383,7 @@
                 <p>HMCL 等客户端可能不会跟随 HTTP 302 跳转。请直接使用返回图片字节的接口，并优先使用 PNG 后缀：</p>
                 <div class="code-block">
                     <button type="button" class="copy-code">复制</button>
-                    <pre><code><span data-base-url>http://your-host:2618</span>/api/v1.png?token=&lt;TOKEN&gt;</code></pre>
+                    <pre><code>http://127.0.0.1:2618/api/v1.png?token=&lt;TOKEN&gt;</code></pre>
                 </div>
                 <ul>
                     <li>如果不带 Token，将按游客速率统计。</li>
@@ -408,7 +408,7 @@
                     <button type="button" class="copy-code">复制</button>
                     <pre><code>Authorization: Bearer &lt;TOKEN&gt;
 X-API-Token: &lt;TOKEN&gt;
-<span data-base-url>http://your-host:2618</span>/random?token=&lt;TOKEN&gt;</code></pre>
+http://127.0.0.1:2618/random?token=&lt;TOKEN&gt;</code></pre>
                 </div>
                 <ul>
                     <li>没有携带 Token 时，已登录会话按注册用户统计，否则按游客统计。</li>
@@ -465,14 +465,9 @@ X-API-Token: &lt;TOKEN&gt;
     const BASE = pathname.replace(/\/docs$/, '');
     const API = BASE + '/admin/api';
     const $ = (id) => document.getElementById(id);
-    const baseUrl = location.origin + BASE;
 
     document.getElementById('brandLink').href = BASE + '/';
     document.getElementById('homeLink').href = BASE + '/';
-
-    document.querySelectorAll('[data-base-url]').forEach((el) => {
-        el.textContent = baseUrl;
-    });
 
     let toastTimer = null;
     const toast = (message, isError = false) => {
