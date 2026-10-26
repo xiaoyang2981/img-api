@@ -1,0 +1,24 @@
+name: Sync from Gitee
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mirror Gitee repository to GitHub
+        env:
+          GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
+          GH_SYNC_TOKEN: ${{ secrets.GH_SYNC_TOKEN }}
+        run: |
+          set -euo pipefail
+          rm -rf mirror.git
+          git clone --mirror "https://xiaoyang2981:${GITEE_TOKEN}@gitee.com/xiaoyang2981/img-api.git" mirror.git
+          cd mirror.git
+          git push --mirror "https://x-access-token:${GH_SYNC_TOKEN}@github.com/xiaoyang2981/img-api.git"

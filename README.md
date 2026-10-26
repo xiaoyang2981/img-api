@@ -410,6 +410,23 @@ location /img/ {
 
 如果没有 Cloudflare 或反代没有传 `X-Forwarded-Proto`，后台复制出来的图片链接仍会是 Node 看到的 `http://` 地址。
 
+### GitHub 自动同步
+
+仓库包含 `.github/workflows/sync-from-gitee.yml`，用于从 Gitee 镜像同步到 GitHub：
+
+- 默认每 30 分钟执行一次
+- 也可以在 GitHub Actions 页面手动运行
+- 同步所有分支和 tag
+- Gitee 是唯一源仓库，GitHub 上的独立提交可能被覆盖
+- Git tag 会同步，但 GitHub Release 不会自动创建
+
+需要在 GitHub 仓库的 `Settings → Secrets and variables → Actions` 中配置：
+
+- `GITEE_TOKEN`：Gitee 私人令牌，具备读取私有仓库权限
+- `GH_SYNC_TOKEN`：GitHub PAT，具备 Contents 和 Workflows 读写权限
+
+GitHub 仓库地址：`https://github.com/xiaoyang2981/img-api`
+
 ## 接入其他服务
 
 `/random` 天然适合被别的站点当图源。例如把它接回 Meting 首页的背景图：

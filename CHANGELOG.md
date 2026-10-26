@@ -17,6 +17,7 @@
 - 图片和接口地址生成支持 `CF-Visitor`、`X-Forwarded-Proto`、`X-Forwarded-Host`，后台复制的链接会自动使用 HTTPS
 - 图片直链增加 `CDN-Cache-Control`、`Cloudflare-CDN-Cache-Control`、`ETag` 和 `Last-Modified`，并补充 Cloudflare 缓存配置建议
 - 后台复制按钮优先显示「WebP（推荐）」，减少误用大体积原图
+- 添加 GitHub Actions 自动同步工作流，可从 Gitee 定时镜像所有分支和 tag
 
 ## 0.2.6
 
