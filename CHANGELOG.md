@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.3
+
+### 变更
+
+- 项目许可证改为 GNU General Public License v3.0 only（GPL-3.0-only）
+- 添加完整 `LICENSE` 文件，并在 `package.json` 中声明许可证
+
 ## 0.2.0
 
 ### 新增

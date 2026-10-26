@@ -335,3 +335,9 @@ BG_REMOTE_API="http://127.0.0.1:2618/random" node.exe node.js
 - 会话令牌只存 SHA-256 哈希；Cookie 为 HttpOnly + SameSite=Lax
 - 只接受 png / jpg / webp / gif / avif，拒绝 SVG（避免脚本注入）
 - 图片文件名限制为十六进制 ID + 扩展名，挡掉路径穿越
+
+## 许可证
+
+本项目使用 **GNU General Public License v3.0 only**（GPL-3.0-only）。
+
+完整许可证文本见 [LICENSE](LICENSE)。
