@@ -24,21 +24,26 @@
 - 会话 Cookie（HttpOnly + SameSite=Lax，30 天）与 Bearer 会话令牌
 - 修改自己的密码；登录失败限流
 - `IMG_API_DATA_DIR` 环境变量，可把数据目录放到别处
+- 标签系统始终启用；`/random` 支持单标签、多标签，默认任意匹配，`tagMode=all` 要求全部匹配
+- 上传增加二次确认框：选择/拖入图片后先确认，确认后才开始上传
+- 新增 `GET /api/v1`：直接返回随机图片字节，不做 302，适合不能跟随跳转的客户端；支持标签筛选和 `format=json`
+- 新增 `GET /api/v1?type=png` / `GET /api/v1.png`：返回 PNG，兼容不支持 WebP 的客户端
+- 所有页面新增深色/浅色模式切换，默认跟随系统并记住选择
+- 所有页面底部补全版权声明
 
 ### 变更
 
 - 移除管理令牌和页面上的令牌状态/令牌输入
+- 删除评级系统（SFW / Questionable / NSFW），旧库 `rating` 列在迁移时删除
 - 设置从 `data/config.json` 迁移到 SQLite
 - 新增 `allowRegistration` 设置，默认开启公开注册
 - 旧版 `data/index.json` 自动迁移，成功后改名为 `index.json.migrated`
-- 标签功能保持默认关闭，关闭时上传和编辑界面都隐藏标签输入
 - Node.js 最低版本提升到 22.13（内置 `node:sqlite`）
 
 ### 修复
 
 - 后台「设置」链接错误地指向 `/setting`，现改为 `/admin/setting`；`/setting` 和 `/setting/` 也会重定向到正确地址
 - 设置页「返回图库」链接指向 `/admin/` 导致 404，现改为 `/admin`
-- 标签功能关闭时，编辑弹窗中的标签输入也一并隐藏
 
 ### 迁移
 

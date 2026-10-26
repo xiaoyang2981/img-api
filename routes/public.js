@@ -2,11 +2,32 @@ import { readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { IMAGE_DIR, WEBP_DIR, getConfig } from '../config.js';
 import { getAuthUser } from '../lib/auth.js';
-import { MIME } from '../lib/image.js';
+import { MIME, toPng } from '../lib/image.js';
 import * as index from '../lib/index.js';
 import { canViewImage } from '../lib/roles.js';
 
 const CACHE_CONTROL = 'public, max-age=31536000, immutable';
+
+const tagFilter = (c) => {
+    const tags = (c.req.query('tag') || '')
+        .split(',')
+        .map((tag) => tag.trim().toLowerCase())
+        .filter(Boolean);
+
+    return {
+        tags,
+        mode: (c.req.query('tagMode') || 'any').toLowerCase() === 'all' ? 'all' : 'any'
+    };
+};
+
+const matchesTags = (image, tags, mode) => {
+    if (!tags.length) return true;
+
+    const imageTags = image.tags || [];
+    return mode === 'all'
+        ? tags.every((tag) => imageTags.includes(tag))
+        : tags.some((tag) => imageTags.includes(tag));
+};
 
 // 处理反向代理子路径：用实际命中的路由段数反推前缀
 // /i/abc.png -> ""，/img/i/abc.png -> "/img"，/admin/api/upload -> ""
@@ -34,7 +55,7 @@ export const decorate = (c, image) => {
     };
 };
 
-const serve = async (c, dir, name, mime) => {
+const serve = async (c, dir, name, mime, cacheOverride = null) => {
     // 文件名只能是「十六进制 id.扩展名」，同时挡掉路径穿越
     if (!/^[a-z0-9]+\.[a-z0-9]+$/i.test(name)) {
         return c.text('Not Found', 404);
@@ -45,7 +66,7 @@ const serve = async (c, dir, name, mime) => {
         return c.text('Not Found', 404);
     }
 
-    let cacheControl = CACHE_CONTROL;
+    let cacheControl = cacheOverride || CACHE_CONTROL;
 
     // 未通过审核的图片只允许审核员/管理员/站长或上传者本人查看
     if (image.status !== 'approved') {
@@ -80,57 +101,115 @@ const serve = async (c, dir, name, mime) => {
     }
 };
 
-// GET /random?tag=&rating=&type=origin|webp&format=json
-export const randomHandler = async (c) => {
-    const config = getConfig();
+const selectRandom = (c) => {
+    const tags = tagFilter(c);
     let pool = index.getApproved();
 
-    // 默认不启用标签，这时 tag 参数会被忽略，纯随机
-    if (config.enableTags) {
-        const tags = (c.req.query('tag') || '')
-            .split(',')
-            .map((tag) => tag.trim().toLowerCase())
-            .filter(Boolean);
-
-        if (tags.length) {
-            pool = pool.filter((image) => tags.every((tag) => (image.tags || []).includes(tag)));
-        }
+    if (tags.tags.length) {
+        pool = pool.filter((image) => matchesTags(image, tags.tags, tags.mode));
     }
 
-    const rating = (c.req.query('rating') || '').trim().toLowerCase();
-    if (rating) {
-        pool = pool.filter((image) => image.rating === rating);
-    }
+    if (!pool.length) return null;
+    return pool[Math.floor(Math.random() * pool.length)];
+};
 
-    if (!pool.length) {
-        return c.json({ error: true, message: '图库为空，或没有符合筛选条件的图片' }, 404);
-    }
-
-    const image = pool[Math.floor(Math.random() * pool.length)];
+const targetFor = (c, image) => {
+    const config = getConfig();
     const type = (c.req.query('type') || '').toLowerCase();
     const wantOrigin = type === 'origin' || type === 'original' || type === 'source';
     const useWebp = !wantOrigin && config.randomPreferWebp && image.webp;
+    const file = useWebp ? image.webp : image.file;
+    const ext = file.split('.').pop().toLowerCase();
 
-    const target = useWebp ? `/w/${image.webp}` : `/i/${image.file}`;
+    return {
+        useWebp,
+        file,
+        dir: useWebp ? WEBP_DIR : IMAGE_DIR,
+        mime: useWebp ? 'image/webp' : (image.mime || MIME[ext] || 'application/octet-stream'),
+        target: useWebp ? `/w/${image.webp}` : `/i/${image.file}`
+    };
+};
+
+const randomJson = (c, image, target) => {
+    const origin = new URL(c.req.url).origin;
+    const prefix = basePath(c);
+
+    return {
+        id: image.id,
+        url: `${origin}${prefix}${target}`,
+        origin: `${origin}${prefix}/i/${image.file}`,
+        webp: image.webp ? `${origin}${prefix}/w/${image.webp}` : null,
+        width: image.width,
+        height: image.height,
+        tags: image.tags
+    };
+};
+
+// GET /random?tag=&tagMode=any|all&type=origin|webp&format=json
+export const randomHandler = async (c) => {
+    const image = selectRandom(c);
+
+    if (!image) {
+        return c.json({ error: true, message: '图库为空，或没有符合筛选条件的图片' }, 404);
+    }
+
+    const { target } = targetFor(c, image);
     const prefix = basePath(c);
 
     if (c.req.query('format') === 'json') {
-        const origin = new URL(c.req.url).origin;
-        return c.json({
-            id: image.id,
-            url: `${origin}${prefix}${target}`,
-            origin: `${origin}${prefix}/i/${image.file}`,
-            webp: image.webp ? `${origin}${prefix}/w/${image.webp}` : null,
-            width: image.width,
-            height: image.height,
-            tags: image.tags,
-            rating: image.rating
-        });
+        return c.json(randomJson(c, image, target));
     }
 
     c.header('Cache-Control', 'no-store');
     return c.redirect(`${prefix}${target}`, 302);
 };
+
+// GET /api/v1?tag=&tagMode=any|all&type=origin|webp|png&format=json
+// 直接返回图片字节，不做 302，适合无法跟随跳转的客户端
+const apiV1 = async (c, forcePng = false) => {
+    const image = selectRandom(c);
+
+    if (!image) {
+        return c.json({ error: true, message: '图库为空，或没有符合筛选条件的图片' }, 404);
+    }
+
+    if (c.req.query('format') === 'json') {
+        const { target } = targetFor(c, image);
+        c.header('Cache-Control', 'no-store');
+        return c.json(randomJson(c, image, target));
+    }
+
+    const type = forcePng ? 'png' : (c.req.query('type') || '').toLowerCase();
+
+    // 兼容只支持 PNG 的客户端
+    if (type === 'png') {
+        try {
+            const source = await readFile(join(IMAGE_DIR, image.file));
+            const body = await toPng(source);
+
+            return new Response(body, {
+                headers: {
+                    'Content-Type': 'image/png',
+                    'Content-Length': String(body.length),
+                    'Cache-Control': 'no-store',
+                    'X-Image-Id': image.id
+                }
+            });
+        } catch {
+            return c.text('Not Found', 404);
+        }
+    }
+
+    const { file, dir, mime } = targetFor(c, image);
+
+    c.header('Cache-Control', 'no-store');
+    c.header('X-Image-Id', image.id);
+
+    return serve(c, dir, file, mime, 'no-store');
+};
+
+export const apiV1Handler = (c) => apiV1(c, false);
+export const apiV1PngHandler = (c) => apiV1(c, true);
 
 // GET /i/:name —— 原图
 export const imageHandler = (c) => {
@@ -142,7 +221,7 @@ export const imageHandler = (c) => {
 // GET /w/:name —— webp 版本
 export const webpHandler = (c) => serve(c, WEBP_DIR, c.req.param('name'), 'image/webp');
 
-// GET /list?page=&pageSize=&q=&tag=&rating=
+// GET /list?page=&pageSize=&q=&tag=&tagMode=any|all
 export const listHandler = async (c) => {
     const config = getConfig();
     if (!config.allowPublicList && !getAuthUser(c)) {
@@ -152,16 +231,12 @@ export const listHandler = async (c) => {
     const page = Math.max(1, Number(c.req.query('page')) || 1);
     const pageSize = Math.min(200, Math.max(1, Number(c.req.query('pageSize')) || 40));
     const keyword = (c.req.query('q') || '').trim().toLowerCase();
-    const tag = (c.req.query('tag') || '').trim().toLowerCase();
-    const rating = (c.req.query('rating') || '').trim().toLowerCase();
+    const tags = tagFilter(c);
 
     let pool = [...index.getApproved()];
 
-    if (tag) {
-        pool = pool.filter((image) => (image.tags || []).includes(tag));
-    }
-    if (rating) {
-        pool = pool.filter((image) => image.rating === rating);
+    if (tags.tags.length) {
+        pool = pool.filter((image) => matchesTags(image, tags.tags, tags.mode));
     }
     if (keyword) {
         pool = pool.filter((image) => {
@@ -209,7 +284,6 @@ export const statsHandler = (c) => {
         ...data,
         totalSizeMB: Number((data.totalSize / 1024 / 1024).toFixed(2)),
         webpSizeMB: Number((data.webpSize / 1024 / 1024).toFixed(2)),
-        enableTags: getConfig().enableTags,
         siteName: getConfig().siteName
     });
 };

@@ -7,10 +7,12 @@ import os from 'node:os';
 import { getPort, initConfig } from './config.js';
 import { closeDb, countUsers } from './lib/db.js';
 import { DB_FILE } from './lib/paths.js';
-import { servePage } from './lib/pages.js';
+import { serveAsset, servePage } from './lib/pages.js';
 import { loadIndex } from './lib/index.js';
 import { adminRoutes } from './routes/admin.js';
 import {
+    apiV1Handler,
+    apiV1PngHandler,
     basePath,
     healthHandler,
     imageHandler,
@@ -28,6 +30,10 @@ app.use('*', logger());
 
 // —— 公开接口 ——
 app.get('/random', randomHandler);
+app.get('/api/v1', apiV1Handler);
+app.get('/api/v1/', apiV1Handler);
+app.get('/api/v1.png', apiV1PngHandler);
+app.get('/api/v1/random.png', apiV1PngHandler);
 app.get('/i/:name', imageHandler);
 app.get('/w/:name', webpHandler);
 app.get('/list', listHandler);
@@ -41,6 +47,10 @@ app.get('/setting', (c) => c.redirect(`${basePath(c)}/admin/setting`));
 app.get('/setting/', (c) => c.redirect(`${basePath(c)}/admin/setting`));
 app.get('/admin/', (c) => c.redirect(`${basePath(c)}/admin`));
 
+// 后台子页面使用相对路径请求 /admin/theme.*
+app.get('/admin/theme.css', (c) => serveAsset(c, 'theme.css', 'text/css; charset=utf-8'));
+app.get('/admin/theme.js', (c) => serveAsset(c, 'theme.js', 'text/javascript; charset=utf-8'));
+
 // —— 管理后台 ——
 app.route('/admin', adminRoutes);
 
@@ -49,6 +59,10 @@ app.get('/', (c) => servePage(c, 'index.html'));
 app.get('/login', (c) => servePage(c, 'login.html'));
 app.get('/register', (c) => servePage(c, 'login.html'));
 
+// 主题资源（/admin/setting 这类页面会用相对路径请求 /admin/theme.*）
+app.get('/theme.css', (c) => serveAsset(c, 'theme.css', 'text/css; charset=utf-8'));
+app.get('/theme.js', (c) => serveAsset(c, 'theme.js', 'text/javascript; charset=utf-8'));
+
 app.notFound((c) =>
     c.json({
         error: true,
@@ -56,6 +70,7 @@ app.notFound((c) =>
         path: c.req.path,
         endpoints: {
             random: '/random',
+            api: '/api/v1',
             origin: '/i/{file}',
             webp: '/w/{file}',
             list: '/list',
@@ -87,7 +102,7 @@ const getLocalIP = () => {
 };
 
 const start = async () => {
-    const config = await initConfig();
+    await initConfig();
     const images = await loadIndex();
     const port = getPort();
     const localIP = getLocalIP();
@@ -104,7 +119,7 @@ const start = async () => {
         console.log('🔐 账户系统: 用户名 + 密码（首次打开后台创建站长）');
         console.log(`   （账户、会话、图片索引和设置都保存在 ${DB_FILE}）`);
         console.log('');
-        console.log(`📦 图库数量: ${images.length} 张 | 标签功能: ${config.enableTags ? '已启用' : '未启用'}`);
+        console.log(`📦 图库数量: ${images.length} 张 | 标签系统: 已启用`);
         console.log(`👤 账户数量: ${userCount} 个${userCount ? '' : '（尚未初始化）'}`);
         console.log(`🔌 端口可通过环境变量 PORT 覆盖（当前 ${port}）`);
         console.log('');

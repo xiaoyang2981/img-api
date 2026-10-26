@@ -87,6 +87,8 @@
     .toast.on { opacity: 1; transform: translate(-50%, 0); }
     .toast.err { border-color: rgba(231,76,60,.5); color: #ff9d92; }
 </style>
+<link rel="stylesheet" href="theme.css">
+<script src="theme.js"></script>
 </head>
 <body>
 <div class="wrap">
@@ -96,6 +98,7 @@
             <span class="who" id="whoami">…</span>
             <a href="/admin/users" id="usersLink">账户管理</a>
             <a href="/admin" id="backLink">← 返回图库</a>
+            <button class="theme-toggle" type="button" data-theme-toggle>☀️</button>
             <button class="ghost mini" id="logoutBtn">退出登录</button>
         </div>
     </header>
@@ -109,14 +112,6 @@
                 <span>显示在前台左上角，默认「梦星的小图床」。</span>
             </div>
             <input type="text" id="siteName" maxlength="60" placeholder="梦星的小图床" style="width:220px;">
-        </div>
-
-        <div class="item">
-            <div class="text">
-                <b>启用标签</b>
-                <span>关闭时：上传界面不显示标签，<code>/random</code> 忽略 <code>tag</code> 参数，纯随机（默认）。打开后可按标签筛选。</span>
-            </div>
-            <label class="switch"><input type="checkbox" id="enableTags"><i></i></label>
         </div>
 
         <div class="item">
@@ -171,7 +166,8 @@
         <h2>接口速查</h2>
         <table>
             <tr><th>接口</th><th>说明</th></tr>
-            <tr><td><code>/random</code></td><td>随机一张，302 跳转。<code>?format=json</code> 返回 JSON，<code>?type=origin</code> 取原图，<code>?tag=wolf</code> 按标签（需启用标签），<code>?rating=sfw</code> 按评级</td></tr>
+            <tr><td><code>/random</code></td><td>随机一张，302 跳转。<code>?format=json</code> 返回 JSON，<code>?type=origin</code> 取原图，<code>?tag=wolf,dragon</code> 按标签（默认任意匹配），<code>?tagMode=all</code> 要求同时包含全部标签</td></tr>
+            <tr><td><code>/api/v1</code></td><td>直接返回图片字节，不 302，适合无法跟随跳转的客户端；支持同样的标签、<code>type</code> 和 <code>format=json</code> 参数；<code>?type=png</code> 或 <code>/api/v1.png</code> 返回 PNG</td></tr>
             <tr><td><code>/i/{file}</code></td><td>原图，长期缓存</td></tr>
             <tr><td><code>/w/{file}</code></td><td>WebP 版本</td></tr>
             <tr><td><code>/list</code></td><td>分页列表，需登录（除非开启公开）</td></tr>
@@ -181,6 +177,11 @@
         </table>
         <p class="hint">给其他服务用：<code id="randomExample">/random?format=json</code></p>
     </div>
+
+    <footer class="site-footer">
+        <span>© <span data-year>2026</span> <span data-footer-site>梦星的小图床</span> · img-api</span>
+        <span>All rights reserved.</span>
+    </footer>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -227,7 +228,6 @@
     const apply = (data) => {
         settings = data;
         $('siteName').value = data.siteName || '梦星的小图床';
-        $('enableTags').checked = data.enableTags;
         $('randomPreferWebp').checked = data.randomPreferWebp;
         $('allowPublicList').checked = data.allowPublicList;
         $('allowRegistration').checked = data.allowRegistration;
@@ -238,6 +238,9 @@
         $('activePort').textContent = location.port || '80';
         $('randomExample').textContent = location.origin + BASE + '/random?format=json';
         document.title = (data.siteName || '梦星的小图床') + ' · 设置';
+        document.querySelectorAll('[data-footer-site]').forEach((el) => {
+            el.textContent = data.siteName || '梦星的小图床';
+        });
     };
 
     const load = async () => {
@@ -254,7 +257,6 @@
                 method: 'PUT',
                 json: {
                     siteName: $('siteName').value.trim(),
-                    enableTags: $('enableTags').checked,
                     randomPreferWebp: $('randomPreferWebp').checked,
                     allowPublicList: $('allowPublicList').checked,
                     allowRegistration: $('allowRegistration').checked,

@@ -94,9 +94,6 @@
         display: inline-block; padding: 1px 7px; border-radius: 99px;
         font-size: .7rem; letter-spacing: .02em;
     }
-    .badge.sfw { background: rgba(46, 204, 113, .16); color: #6ee7a4; }
-    .badge.questionable { background: rgba(241, 196, 15, .16); color: #ffd75e; }
-    .badge.nsfw { background: rgba(231, 76, 60, .18); color: #ff8d80; }
     .badge.pending { background: rgba(241, 196, 15, .16); color: #ffd75e; }
     .badge.approved { background: rgba(46, 204, 113, .16); color: #6ee7a4; }
     .badge.rejected { background: rgba(231, 76, 60, .18); color: #ff8d80; }
@@ -120,6 +117,23 @@
     .dialog p { color: var(--muted); font-size: .84rem; line-height: 1.7; margin-bottom: 14px; }
     .dialog input { width: 100%; margin-bottom: 14px; }
     .dialog .row { justify-content: flex-end; }
+    .dialog.confirm-dialog { width: min(620px, 100%); }
+    .confirm-files {
+        display: grid; grid-template-columns: repeat(auto-fill, minmax(86px, 1fr));
+        gap: 8px; max-height: 250px; overflow: auto; margin: 12px 0 14px;
+        padding-right: 4px;
+    }
+    .confirm-file {
+        background: #0b0d12; border: 1px solid var(--border); border-radius: 9px;
+        overflow: hidden;
+    }
+    .confirm-file img { display: block; width: 100%; aspect-ratio: 1 / 1; object-fit: cover; }
+    .confirm-file span {
+        display: block; padding: 4px 6px; color: var(--muted); font-size: .66rem;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .confirm-summary { color: var(--muted); font-size: .8rem; line-height: 1.8; word-break: break-word; }
+    .confirm-summary b { color: var(--text); }
     .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
     .field label { font-size: .8rem; color: var(--muted); }
     .toast {
@@ -132,6 +146,8 @@
     .toast.err { border-color: rgba(231,76,60,.5); color: #ff9d92; }
     code { background: rgba(255,255,255,.07); padding: 1px 6px; border-radius: 5px; font-size: .82em; }
 </style>
+<link rel="stylesheet" href="theme.css">
+<script src="theme.js"></script>
 </head>
 <body>
 <div class="wrap">
@@ -139,24 +155,20 @@
         <h1>🖼️ 图床后台 <span>·</span> <a href="/" id="homeLink" class="mini">前台</a> <a href="admin/review" id="reviewLink" class="mini" hidden>审核</a> <a href="admin/setting" id="settingLink" class="mini" hidden>设置</a> <a href="admin/users" id="usersLink" class="mini" hidden>账户</a></h1>
         <div class="account">
             <span class="who" id="whoami">加载中…</span>
+            <button class="theme-toggle" type="button" data-theme-toggle>☀️</button>
             <button class="ghost mini" id="logoutBtn">退出登录</button>
         </div>
     </header>
 
     <div class="panel">
-        <div class="dropzone" id="dropzone">
+        <div class="dropzone" id="dropzone" role="button" tabindex="0" aria-label="选择或拖入图片">
             <div class="big">📤</div>
             <div>把图片拖到这里，或点击选择文件</div>
             <div class="hint">支持 PNG / JPG / WebP / GIF / AVIF，可多选；上传后自动生成 WebP 副本</div>
             <input type="file" id="fileInput" accept="image/png,image/jpeg,image/webp,image/gif,image/avif" multiple hidden>
         </div>
         <div class="row" id="uploadMeta">
-            <input type="text" id="tags" placeholder="标签，逗号分隔：wolf,dragon" style="flex:2;min-width:200px;" hidden>
-            <select id="rating">
-                <option value="sfw">SFW</option>
-                <option value="questionable">Questionable</option>
-                <option value="nsfw">NSFW</option>
-            </select>
+            <input type="text" id="tags" placeholder="标签，逗号分隔：wolf,dragon" style="flex:2;min-width:200px;">
             <input type="text" id="title" placeholder="标题（可选）" style="flex:2;min-width:180px;">
             <input type="text" id="source" placeholder="来源 / 画师链接（可选）" style="flex:2;min-width:180px;">
         </div>
@@ -182,25 +194,35 @@
 
     <div class="grid" id="grid"></div>
     <div class="pager" id="pager"></div>
+
+    <footer class="site-footer">
+        <span>© <span data-year>2026</span> <span data-footer-site>梦星的小图床</span> · img-api</span>
+        <span>All rights reserved.</span>
+    </footer>
 </div>
 
 <div class="toast" id="toast"></div>
+<!-- 上传确认 -->
+<div class="overlay" id="uploadConfirmOverlay">
+    <div class="dialog confirm-dialog">
+        <h2>确认上传</h2>
+        <p id="uploadConfirmText">确认后才会开始上传。</p>
+        <div class="confirm-files" id="uploadConfirmFiles"></div>
+        <div class="confirm-summary" id="uploadConfirmSummary"></div>
+        <div class="row" style="margin-top:16px;">
+            <button class="ghost" id="uploadCancel">取消</button>
+            <button id="uploadConfirm">确认上传</button>
+        </div>
+    </div>
+</div>
 <!-- 编辑 -->
 <div class="overlay" id="editOverlay">
     <div class="dialog">
         <h2>编辑图片信息</h2>
         <input type="hidden" id="editId">
-        <div class="field" id="editTagsField" hidden>
+        <div class="field" id="editTagsField">
             <label>标签（逗号分隔）</label>
             <input type="text" id="editTags" placeholder="wolf, dragon, artist-name">
-        </div>
-        <div class="field">
-            <label>评级</label>
-            <select id="editRating">
-                <option value="sfw">SFW</option>
-                <option value="questionable">Questionable</option>
-                <option value="nsfw">NSFW</option>
-            </select>
         </div>
         <div class="field">
             <label>标题</label>
@@ -234,7 +256,6 @@
     let page = 1;
     let search = '';
     let statusFilterValue = '';
-    let enableTags = false;
 
     const $ = (id) => document.getElementById(id);
     const grid = $('grid');
@@ -289,11 +310,9 @@
     };
 
     const badges = (image) => {
-        const cls = image.rating || 'sfw';
         const status = image.status || 'approved';
-        return '<span class="badge ' + cls + '">' + cls.toUpperCase() + '</span>' +
-            '<span class="badge ' + status + '" title="' + esc(image.reviewNote || '') + '">' +
-                (STATUS_LABELS[status] || status) + '</span>';
+        return '<span class="badge ' + status + '" title="' + esc(image.reviewNote || '') + '">' +
+            (STATUS_LABELS[status] || status) + '</span>';
     };
 
     const renderCards = (images) => {
@@ -320,7 +339,7 @@
                         '<span>' + fmtSize(image.size) + '</span>' +
                         (image.webpSize ? '<span>webp ' + fmtSize(image.webpSize) + '</span>' : '<span>无 webp</span>') +
                     '</div>' +
-                    (enableTags && tags ? '<div class="tags">#' + esc(tags) + '</div>' : '') +
+                    (tags ? '<div class="tags">#' + esc(tags) + '</div>' : '') +
                     '<div class="actions">' +
                         '<button class="mini ghost" data-copy="' + esc(image.url) + '">原图</button>' +
                         (image.webpUrl ? '<button class="mini ghost" data-copy="' + esc(image.webpUrl) + '">WebP</button>' : '') +
@@ -358,15 +377,71 @@
         $('nextBtn').onclick = () => { page = Math.min(data.pages, page + 1); load(); };
     };
 
-    const uploadFiles = async (files) => {
+    let pendingUpload = null;
+    let pendingUploadUrls = [];
+
+    const clearPendingUpload = () => {
+        for (const url of pendingUploadUrls) URL.revokeObjectURL(url);
+        pendingUploadUrls = [];
+        pendingUpload = null;
+    };
+
+    const closeUploadConfirm = () => {
+        $('uploadConfirmOverlay').classList.remove('on');
+        clearPendingUpload();
+    };
+
+    const stageFiles = (files) => {
+        const list = [...files].filter((file) => file && file.type.startsWith('image/'));
+        if (!list.length) return;
+
+        clearPendingUpload();
+
+        const meta = {
+            tags: $('tags').value.trim(),
+            title: $('title').value.trim(),
+            source: $('source').value.trim()
+        };
+
+        pendingUpload = { files: list, meta };
+
+        $('uploadConfirmText').textContent =
+            '已选择 ' + list.length + ' 张图片，确认后才会开始上传。';
+
+        $('uploadConfirmFiles').innerHTML = list.map((file) => {
+            const url = URL.createObjectURL(file);
+            pendingUploadUrls.push(url);
+
+            return '<div class="confirm-file">' +
+                '<img src="' + url + '" alt="">' +
+                '<span title="' + esc(file.name) + '">' + esc(file.name) + '</span>' +
+            '</div>';
+        }).join('');
+
+        const summary = [];
+        summary.push(meta.tags ? '标签：' + esc(meta.tags) : '标签：无');
+        if (meta.title) summary.push('标题：' + esc(meta.title));
+        if (meta.source) summary.push('来源：' + esc(meta.source));
+        summary.push('上传后会进入<strong>待审核</strong>，审核通过后才会出现在图库。');
+        $('uploadConfirmSummary').innerHTML = summary.join('<br>');
+
+        $('uploadConfirmOverlay').classList.add('on');
+    };
+
+    const uploadFiles = async (files, metaOverride = null) => {
         if (!files.length) return;
+
+        const meta = metaOverride || {
+            tags: $('tags').value,
+            title: $('title').value,
+            source: $('source').value
+        };
 
         const form = new FormData();
         for (const file of files) form.append('file', file);
-        form.append('tags', $('tags').hidden ? '' : $('tags').value);
-        form.append('rating', $('rating').value);
-        form.append('title', $('title').value);
-        form.append('source', $('source').value);
+        form.append('tags', meta.tags || '');
+        form.append('title', meta.title || '');
+        form.append('source', meta.source || '');
 
         const bar = $('progress');
         bar.classList.add('on');
@@ -412,8 +487,14 @@
 
     // —— 事件 ——
     $('dropzone').onclick = () => $('fileInput').click();
+    $('dropzone').addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            $('fileInput').click();
+        }
+    });
     $('fileInput').onchange = (event) => {
-        uploadFiles([...event.target.files]);
+        stageFiles(event.target.files);
         event.target.value = '';
     };
 
@@ -432,7 +513,29 @@
     });
 
     $('dropzone').addEventListener('drop', (event) => {
-        uploadFiles([...event.dataTransfer.files].filter((file) => file.type.startsWith('image/')));
+        stageFiles(event.dataTransfer.files);
+    });
+
+    $('uploadCancel').onclick = () => closeUploadConfirm();
+
+    $('uploadConfirm').onclick = async () => {
+        if (!pendingUpload) return;
+
+        const { files, meta } = pendingUpload;
+        $('uploadConfirmOverlay').classList.remove('on');
+        clearPendingUpload();
+
+        await uploadFiles(files, meta);
+    };
+
+    $('uploadConfirmOverlay').addEventListener('click', (event) => {
+        if (event.target === $('uploadConfirmOverlay')) closeUploadConfirm();
+    });
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && $('uploadConfirmOverlay').classList.contains('on')) {
+            closeUploadConfirm();
+        }
     });
 
     grid.addEventListener('click', async (event) => {
@@ -444,7 +547,6 @@
             if (!image) return;
             $('editId').value = image.id;
             $('editTags').value = (image.tags || []).join(', ');
-            $('editRating').value = image.rating || 'sfw';
             $('editTitle').value = image.title || '';
             $('editSource').value = image.source || '';
             $('editOverlay').classList.add('on');
@@ -510,7 +612,6 @@
                 method: 'PATCH',
                 json: {
                     tags: $('editTags').value,
-                    rating: $('editRating').value,
                     title: $('editTitle').value,
                     source: $('editSource').value
                 }
@@ -521,12 +622,6 @@
         } catch (error) {
             toast(error.message, true);
         }
-    };
-
-    const applySettings = (settings) => {
-        enableTags = !!settings.enableTags;
-        $('tags').hidden = !enableTags;
-        $('editTagsField').hidden = !enableTags;
     };
 
     const boot = async () => {
@@ -548,8 +643,10 @@
             $('scanBtn').hidden = !canManage;
 
             const settings = await request('/settings');
-            applySettings(settings);
             document.title = (settings.siteName || '梦星的小图床') + ' · 后台';
+            document.querySelectorAll('[data-footer-site]').forEach((el) => {
+                el.textContent = settings.siteName || '梦星的小图床';
+            });
             await load();
         } catch (error) {
             toast(error.message, true);

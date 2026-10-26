@@ -103,9 +103,12 @@
     .foot a { color: var(--accent); text-decoration: none; }
     .hidden { display: none !important; }
 </style>
+<link rel="stylesheet" href="theme.css">
+<script src="theme.js"></script>
 </head>
 <body>
 <div class="card">
+    <button class="theme-toggle theme-toggle-card" type="button" data-theme-toggle>☀️</button>
     <div class="logo">🖼️</div>
     <h1 id="title">登录图床</h1>
     <p class="sub" id="subtitle">使用你的账户登录。</p>
@@ -135,6 +138,7 @@
 
     <p class="switch-line" id="switchLine"></p>
     <p class="foot"><a href="/" id="homeLink">← 返回首页</a></p>
+    <p class="login-copyright">© <span data-year>2026</span> <span data-footer-site>梦星的小图床</span> · img-api · All rights reserved.</p>
 </div>
 
 <script>
@@ -292,6 +296,9 @@
             const status = await request('/auth/status');
             allowRegistration = status.allowRegistration !== false;
             siteName = status.siteName || siteName;
+            document.querySelectorAll('[data-footer-site]').forEach((el) => {
+                el.textContent = siteName;
+            });
 
             if (status.authenticated) {
                 location.href = BASE + '/admin';

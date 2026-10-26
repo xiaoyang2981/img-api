@@ -60,7 +60,6 @@ const settingPayload = (user) => {
     return {
         siteName: config.siteName,
         port: config.port,
-        enableTags: config.enableTags,
         randomPreferWebp: config.randomPreferWebp,
         allowPublicList: config.allowPublicList,
         allowRegistration: config.allowRegistration,
@@ -309,7 +308,6 @@ adminRoutes.get('/api/images', requireRoles('owner', 'admin', 'member'), (c) => 
     const page = Math.max(1, Number(c.req.query('page')) || 1);
     const pageSize = Math.min(200, Math.max(1, Number(c.req.query('pageSize')) || 40));
     const keyword = (c.req.query('q') || '').trim().toLowerCase();
-    const rating = (c.req.query('rating') || '').trim().toLowerCase();
     const status = (c.req.query('status') || '').trim().toLowerCase();
 
     let pool = [...index.getAll()];
@@ -323,9 +321,6 @@ adminRoutes.get('/api/images', requireRoles('owner', 'admin', 'member'), (c) => 
 
     if (IMAGE_STATUSES.includes(status)) {
         pool = pool.filter((image) => image.status === status);
-    }
-    if (rating) {
-        pool = pool.filter((image) => image.rating === rating);
     }
     if (keyword) {
         pool = pool.filter((image) => {
@@ -372,7 +367,6 @@ adminRoutes.post('/api/upload', requireRoles('owner', 'admin', 'member'), async 
 
     const meta = {
         tags: [body.tags ?? ''].flat().join(','),
-        rating: [body.rating ?? ''].flat()[0] || 'sfw',
         title: [body.title ?? ''].flat()[0] || '',
         source: [body.source ?? ''].flat()[0] || ''
     };
