@@ -3,6 +3,9 @@ name: Sync from Gitee
 on:
   schedule:
     - cron: "*/30 * * * *"
+  push:
+    tags:
+      - "v*"
   workflow_dispatch:
 
 permissions:
