@@ -11,5 +11,7 @@ data/img-api.db-shm
 data/img-api.db-journal
 data/images/*
 data/webp/*
+data/watermarks/*
 !data/images/.gitkeep
 !data/webp/.gitkeep
+!data/watermarks/.gitkeep

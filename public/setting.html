@@ -59,6 +59,46 @@
         font-family: inherit;
     }
     input:focus { border-color: var(--accent); }
+    select {
+        appearance: none;
+        -webkit-appearance: none;
+        background-color: rgba(0,0,0,.25);
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%238b93a7' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 11px center;
+        color: var(--text);
+        border: 1px solid var(--border);
+        border-radius: 9px;
+        padding: 8px 34px 8px 12px;
+        min-width: 132px;
+        font: inherit;
+        font-size: .86rem;
+        outline: none;
+        cursor: pointer;
+    }
+    select:focus { border-color: var(--accent); }
+    select option { background: #171a22; color: var(--text); }
+    input[type=color] {
+        appearance: none;
+        -webkit-appearance: none;
+        width: 64px;
+        height: 38px;
+        padding: 3px;
+        border: 1px solid var(--border);
+        border-radius: 9px;
+        background: rgba(0,0,0,.25);
+        cursor: pointer;
+    }
+    input[type=color]::-webkit-color-swatch-wrapper { padding: 0; }
+    input[type=color]::-webkit-color-swatch { border: none; border-radius: 6px; }
+    input[type=color]::-moz-color-swatch { border: none; border-radius: 6px; }
+    html[data-theme="light"] select {
+        background-color: #fff;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%2364748b' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+        border-color: rgba(16, 24, 40, .16);
+    }
+    html[data-theme="light"] select option { background: #fff; color: #1b2436; }
+    html[data-theme="light"] input[type=color] { background: #fff; border-color: rgba(16, 24, 40, .16); }
     .token-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
     .token-row code {
         background: rgba(0,0,0,.3); border: 1px solid var(--border); border-radius: 8px;
@@ -168,7 +208,7 @@
         <div class="item">
             <div class="text">
                 <b>随机接口默认返回 WebP</b>
-                <span>关闭后 <code>/random</code> 跳转到原图。无论开关如何，都能用 <code>?type=origin</code> / <code>?type=webp</code> 强制指定。</span>
+                <span>关闭后带有效 Token 的请求默认跳转原图；未认证请求始终只能取 WebP。可用 <code>?type=origin</code> / <code>?type=webp</code> 强制指定。</span>
             </div>
             <label class="switch"><input type="checkbox" id="randomPreferWebp"><i></i></label>
         </div>
@@ -195,6 +235,52 @@
                 <span>保存在配置里，修改后重启生效；环境变量 <code>PORT</code> 优先级更高（当前进程使用 <code id="activePort">-</code>）。<b id="portRestricted" hidden style="color:#ffb86b;">仅站长可修改。</b></span>
             </div>
             <input type="number" id="port" min="1" max="65535">
+        </div>
+    </div>
+
+    <div class="panel">
+        <h2>接口水印</h2>
+        <p class="hint">只作用于上传时勾选「接口水印」的图片。通过 API 输出时会添加可见水印和不可见标识；直接访问 <code>/i</code>、<code>/w</code> 不添加。</p>
+        <div class="item">
+            <div class="text">
+                <b>水印文字</b>
+                <span>默认 <code>✨</code>。自定义文字会用服务器字体渲染，建议使用简单英文或符号。</span>
+            </div>
+            <input type="text" id="watermarkText" maxlength="40" placeholder="✨" style="width:220px;">
+        </div>
+        <div class="item">
+            <div class="text">
+                <b>可见水印不透明度</b>
+                <span>0–1，默认 0.35。设为 0 时只保留不可见标识。</span>
+            </div>
+            <input type="number" id="watermarkOpacity" min="0" max="1" step="0.05" style="width:120px;">
+        </div>
+        <div class="item">
+            <div class="text">
+                <b>水印位置</b>
+                <span>默认右下角。</span>
+            </div>
+            <select id="watermarkPosition">
+                <option value="bottom-right">右下角</option>
+                <option value="bottom-left">左下角</option>
+                <option value="top-right">右上角</option>
+                <option value="top-left">左上角</option>
+                <option value="center">居中</option>
+            </select>
+        </div>
+        <div class="item">
+            <div class="text">
+                <b>水印大小</b>
+                <span>按图片短边百分比计算，范围 1–30，默认 7。</span>
+            </div>
+            <input type="number" id="watermarkSize" min="1" max="30" step="1" style="width:120px;">
+        </div>
+        <div class="item">
+            <div class="text">
+                <b>水印颜色</b>
+                <span>可见水印的文字 / 图标颜色。</span>
+            </div>
+            <input type="color" id="watermarkColor" style="width:64px;height:38px;padding:3px;">
         </div>
     </div>
 
@@ -321,16 +407,19 @@
         <h2>接口速查</h2>
         <table>
             <tr><th>接口</th><th>说明</th></tr>
-            <tr><td><code>/random</code></td><td>随机一张，302 跳转。<code>?format=json</code> 返回 JSON，<code>?type=origin</code> 取原图，<code>?tag=wolf,dragon</code> 按标签（默认任意匹配），<code>?tagMode=all</code> 要求同时包含全部标签</td></tr>
-            <tr><td><code>/api/v1</code></td><td>直接返回图片字节，不 302，适合无法跟随跳转的客户端；支持同样的标签、<code>type</code> 和 <code>format=json</code> 参数；<code>?type=png</code> 或 <code>/api/v1.png</code> 返回 PNG</td></tr>
-            <tr><td><code>/i/{file}</code></td><td>原图，长期缓存</td></tr>
-            <tr><td><code>/w/{file}</code></td><td>WebP 版本</td></tr>
+            <tr><td><code>/api/v1rd</code></td><td>V1 随机一张，302 跳转。包含已通过图片（含前台隐藏），<code>?format=json</code> 返回 JSON；未认证只能得到 WebP</td></tr>
+            <tr><td><code>/api/v2rd</code></td><td>V2 图库随机一张，302 跳转。只使用 V2 接口图库中已加入的图片</td></tr>
+            <tr><td><code>/api/v1</code></td><td>直接返回图片字节，不跳转；图库包含已通过图片（含前台隐藏）；可用 <code>id</code> 指定单张；<code>?type=png</code> 或 <code>/api/v1.png</code> 返回 PNG</td></tr>
+            <tr><td><code>/api/v2</code></td><td>只从 V2 接口图库中已加入的图片随机；支持标签、类型和 JSON 参数；可在 <code>/admin/v2</code> 管理</td></tr>
+            <tr><td><code>/api/avatar?user={username}</code></td><td>头像服务，默认 JPG，<code>?type=png</code> 输出 PNG；省略用户时使用当前 Token 用户或站长</td></tr>
+            <tr><td><code>/i/{file}</code></td><td>原图；未认证会跳转到 WebP，需登录会话或 Token</td></tr>
+            <tr><td><code>/w/{file}</code></td><td>WebP 版本，长期缓存</td></tr>
             <tr><td><code>/list</code></td><td>分页列表，需登录或 API Token（除非开启公开）</td></tr>
             <tr><td><code>/info/{id}</code></td><td>单张图片信息</td></tr>
             <tr><td><code>/stats</code></td><td>数量与体积统计</td></tr>
             <tr><td><code>POST /admin/api/upload</code></td><td>上传，使用登录会话或 <code>Authorization: Bearer &lt;token&gt;</code></td></tr>
         </table>
-        <p class="hint">给其他服务用：<code id="randomExample">/random?format=json</code></p>
+        <p class="hint">给其他服务用：<code id="randomExample">/api/v1rd?format=json</code></p>
     </div>
 
     <footer class="site-footer">
@@ -393,6 +482,11 @@
         $('rateLimitGuest').value = data.rateLimitGuest ?? 200;
         $('rateLimitUser').value = data.rateLimitUser ?? 2000;
         $('tokenBanHours').value = data.tokenBanHours ?? 12;
+        $('watermarkText').value = data.watermarkText || '✨';
+        $('watermarkOpacity').value = data.watermarkOpacity ?? 0.35;
+        $('watermarkPosition').value = data.watermarkPosition || 'bottom-right';
+        $('watermarkSize').value = data.watermarkSize ?? 7;
+        $('watermarkColor').value = data.watermarkColor || '#ffffff';
         $('port').value = data.port;
         $('port').disabled = data.canEditPort === false;
         $('portRestricted').hidden = data.canEditPort !== false;
@@ -416,7 +510,7 @@
         $('emailConfigHint').classList.toggle('ok', data.emailConfigured);
         $('emailConfigHint').style.color = data.emailConfigured ? '' : '#ffb86b';
 
-        $('randomExample').textContent = location.origin + BASE + '/random?format=json';
+        $('randomExample').textContent = location.origin + BASE + '/api/v1rd?format=json';
         document.title = (data.siteName || '梦星的小图床') + ' · 设置';
         document.querySelectorAll('[data-footer-site]').forEach((el) => {
             el.textContent = data.siteName || '梦星的小图床';
@@ -451,6 +545,11 @@
                     rateLimitGuest: Number($('rateLimitGuest').value),
                     rateLimitUser: Number($('rateLimitUser').value),
                     tokenBanHours: Number($('tokenBanHours').value),
+                    watermarkText: $('watermarkText').value.trim(),
+                    watermarkOpacity: Number($('watermarkOpacity').value),
+                    watermarkPosition: $('watermarkPosition').value,
+                    watermarkSize: Number($('watermarkSize').value),
+                    watermarkColor: $('watermarkColor').value,
                     port: Number($('port').value)
                 }
             });

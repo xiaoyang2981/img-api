@@ -33,6 +33,10 @@
     .tab b { color: var(--text); margin-left: 5px; }
     .tab.active { color: #fff; background: rgba(80,183,254,.18); border-color: rgba(80,183,254,.5); }
     .tab.active b { color: #a9dbff; }
+    .v2-tabs { margin-top: -6px; padding-top: 12px; border-top: 1px solid var(--border); }
+    .v2-tabs .tab-label { color: var(--muted); font-size: .74rem; letter-spacing: .08em; align-self: center; margin-right: 2px; }
+    .v2-tabs .tab.active { background: rgba(124,108,255,.18); border-color: rgba(124,108,255,.5); }
+    .v2-tabs .tab.active b { color: #d4c8ff; }
     button {
         font: inherit; background: linear-gradient(45deg, #50b7fe, #3aa7fe); color: #fff;
         border: none; border-radius: 9px; padding: 8px 14px; font-size: .82rem; cursor: pointer;
@@ -90,6 +94,7 @@
             <a href="/" id="homeLink">前台</a>
             <a href="/admin/profile" id="profileLink">个人信息</a>
             <a href="/admin" id="adminLink" hidden>返回后台</a>
+            <a href="/admin/v2" id="v2Link" hidden>V2 图库</a>
             <a href="/admin/setting" id="settingLink" hidden>设置</a>
             <a href="/admin/users" id="usersLink" hidden>账户管理</a>
             <button class="theme-toggle" type="button" data-theme-toggle>☀️</button>
@@ -97,10 +102,17 @@
         </div>
     </header>
 
-    <div class="tabs">
+    <div class="tabs" id="imageTabs">
         <button class="tab active" data-status="pending">待审核 <b id="countPending">0</b></button>
         <button class="tab" data-status="approved">已通过 <b id="countApproved">0</b></button>
         <button class="tab" data-status="rejected">已拒绝 <b id="countRejected">0</b></button>
+    </div>
+
+    <div class="tabs v2-tabs" id="v2Tabs">
+        <span class="tab-label">V2 接口审核</span>
+        <button class="tab" data-v2-status="pending">V2 待审核 <b id="countV2Pending">0</b></button>
+        <button class="tab" data-v2-status="approved">V2 已加入 <b id="countV2Approved">0</b></button>
+        <button class="tab" data-v2-status="rejected">V2 已拒绝 <b id="countV2Rejected">0</b></button>
     </div>
 
     <div class="grid" id="grid"></div>
@@ -122,6 +134,7 @@
     document.getElementById('homeLink').href = BASE + '/';
     document.getElementById('profileLink').href = BASE + '/admin/profile';
     document.getElementById('adminLink').href = BASE + '/admin';
+    document.getElementById('v2Link').href = BASE + '/admin/v2';
     document.getElementById('settingLink').href = BASE + '/admin/setting';
     document.getElementById('usersLink').href = BASE + '/admin/users';
 
@@ -130,6 +143,8 @@
 
     let currentUser = null;
     let status = 'pending';
+    let v2Mode = false;
+    let v2Status = 'pending';
     let page = 1;
     let toastTimer = null;
 
@@ -180,10 +195,63 @@
         $('nextBtn').onclick = () => { page = Math.min(data.pages, page + 1); load(); };
     };
 
-    const render = (data) => {
+    const renderCounts = (data) => {
         $('countPending').textContent = data.stats?.pending ?? 0;
         $('countApproved').textContent = data.stats?.approved ?? 0;
         $('countRejected').textContent = data.stats?.rejected ?? 0;
+        $('countV2Pending').textContent = data.v2Stats?.pending ?? 0;
+        $('countV2Approved').textContent = data.v2Stats?.approved ?? 0;
+        $('countV2Rejected').textContent = data.v2Stats?.rejected ?? 0;
+    };
+
+    const renderV2 = (data) => {
+        renderCounts(data);
+
+        if (!data.images.length) {
+            const labels = {
+                pending: '没有待审核的 V2 申请',
+                approved: '还没有加入 V2 的图片',
+                rejected: '没有被拒绝的 V2 申请'
+            };
+            $('grid').innerHTML = '<div class="empty">' + (labels[v2Status] || '没有图片') + '</div>';
+            $('pager').innerHTML = '';
+            return;
+        }
+
+        $('grid').innerHTML = data.images.map((image) => {
+            const thumb = image.webpUrl || image.url;
+            const tags = (image.tags || []).join(', ');
+            const actions = image.v2Status === 'pending'
+                ? '<button class="ok mini" data-v2-approve="' + esc(image.id) + '">通过 V2</button>' +
+                  '<button class="danger mini" data-v2-reject="' + esc(image.id) + '">拒绝 V2</button>'
+                : '';
+
+            return '<div class="card">' +
+                '<img src="' + esc(thumb) + '" alt="' + esc(image.id) + '" loading="lazy" ' +
+                    'onclick="window.open(\'' + esc(image.url) + '\',\'_blank\')">' +
+                '<div class="body">' +
+                    '<div class="meta">' +
+                        '<span class="badge approved">已通过审核</span>' +
+                        '<span class="badge ' + (image.v2Status === 'approved' ? 'approved' : image.v2Status) + '">V2 · ' +
+                            ({ pending: '待审核', approved: '已加入', rejected: '已拒绝' }[image.v2Status] || image.v2Status) + '</span>' +
+                        '<span>' + image.width + '×' + image.height + '</span>' +
+                    '</div>' +
+                    '<div class="title">' + esc(image.title || image.id) + '</div>' +
+                    '<div class="sub">上传者：' + esc(image.owner || '未知') + ' · ' + esc(fmtDate(image.createdAt)) + '</div>' +
+                    (tags ? '<div class="tags">#' + esc(tags) + '</div>' : '') +
+                    (image.v2RequestedAt ? '<div class="sub">申请时间：' + esc(fmtDate(image.v2RequestedAt)) + '</div>' : '') +
+                    (image.v2ReviewNote ? '<div class="note">V2 备注：' + esc(image.v2ReviewNote) + '</div>' : '') +
+                    (actions ? '<div class="actions">' + actions + '</div>' : '') +
+                '</div>' +
+            '</div>';
+        }).join('');
+
+        renderPager(data);
+    };
+
+    const render = (data) => {
+        if (v2Mode) return renderV2(data);
+        renderCounts(data);
 
         if (!data.images.length) {
             const labels = { pending: '没有待审核图片', approved: '还没有已通过的图片', rejected: '还没有被拒绝的图片' };
@@ -229,7 +297,10 @@
 
     const load = async () => {
         try {
-            const data = await request('/review?status=' + encodeURIComponent(status) + '&page=' + page);
+            const path = v2Mode
+                ? '/review/v2?status=' + encodeURIComponent(v2Status) + '&page=' + page
+                : '/review?status=' + encodeURIComponent(status) + '&page=' + page;
+            const data = await request(path);
             render(data);
         } catch (error) {
             toast(error.message, true);
@@ -254,8 +325,29 @@
         }
     };
 
+    const setV2Status = async (id, nextStatus) => {
+        let note = '';
+        if (nextStatus === 'rejected') {
+            const value = prompt('拒绝原因（可选，会显示在 V2 审核记录里）');
+            if (value === null) return;
+            note = value.trim();
+        }
+
+        try {
+            await request('/review/v2/' + id, { method: 'PATCH', json: { status: nextStatus, note } });
+            toast(nextStatus === 'approved' ? '已通过，图片加入 V2 接口' : '已拒绝 V2 申请');
+            await load();
+        } catch (error) {
+            toast(error.message, true);
+        }
+    };
+
     $('grid').addEventListener('click', (event) => {
         const target = event.target;
+
+        if (target.dataset.v2Approve) return setV2Status(target.dataset.v2Approve, 'approved');
+        if (target.dataset.v2Reject) return setV2Status(target.dataset.v2Reject, 'rejected');
+
         const id = target.dataset.approve || target.dataset.reject || target.dataset.pending;
         if (!id) return;
 
@@ -264,11 +356,24 @@
         if (target.dataset.pending) return setStatus(id, 'pending');
     });
 
-    document.querySelectorAll('.tab').forEach((tab) => {
+    document.querySelectorAll('#imageTabs .tab').forEach((tab) => {
         tab.onclick = () => {
+            v2Mode = false;
             status = tab.dataset.status;
             page = 1;
-            document.querySelectorAll('.tab').forEach((item) => item.classList.toggle('active', item === tab));
+            document.querySelectorAll('#v2Tabs .tab').forEach((item) => item.classList.remove('active'));
+            document.querySelectorAll('#imageTabs .tab').forEach((item) => item.classList.toggle('active', item === tab));
+            load();
+        };
+    });
+
+    document.querySelectorAll('#v2Tabs .tab').forEach((tab) => {
+        tab.onclick = () => {
+            v2Mode = true;
+            v2Status = tab.dataset.v2Status;
+            page = 1;
+            document.querySelectorAll('#imageTabs .tab').forEach((item) => item.classList.remove('active'));
+            document.querySelectorAll('#v2Tabs .tab').forEach((item) => item.classList.toggle('active', item === tab));
             load();
         };
     });
@@ -296,6 +401,7 @@
             $('whoami').innerHTML = '<b>' + esc(currentUser.displayName || currentUser.username) + '</b> · ' +
                 '<span class="role ' + esc(currentUser.role) + '">' + (ROLE_LABELS[currentUser.role] || currentUser.role) + '</span>';
             $('adminLink').hidden = !canManage;
+            $('v2Link').hidden = !canManage;
             $('settingLink').hidden = !canManage;
             $('usersLink').hidden = !canManage;
 

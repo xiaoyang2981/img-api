@@ -98,6 +98,17 @@
     .badge.approved { background: rgba(46, 204, 113, .16); color: #6ee7a4; }
     .badge.rejected { background: rgba(231, 76, 60, .18); color: #ff8d80; }
     .badge.hidden { background: rgba(240, 160, 32, .16); color: #ffbf69; }
+    .badge.watermark { background: rgba(124, 108, 255, .16); color: #c8b4ff; }
+    .check-line {
+        display: flex; align-items: flex-start; justify-content: flex-start;
+        gap: 8px; color: var(--text); font-size: .84rem; line-height: 1.6;
+        cursor: pointer; margin: 12px 0 6px; width: 100%;
+    }
+    .check-line input[type="checkbox"] {
+        width: 18px; height: 18px; flex: none; margin: 1px 0 0;
+        accent-color: var(--accent); cursor: pointer;
+    }
+    .check-line span { flex: 1; min-width: 0; color: var(--muted); font-size: .76rem; }
     .tags { font-size: .74rem; color: var(--accent); line-height: 1.5; word-break: break-all; }
     .actions { display: flex; gap: 6px; flex-wrap: wrap; }
     .empty { text-align: center; color: var(--muted); padding: 46px 10px; }
@@ -117,6 +128,7 @@
     .dialog h2 { font-size: 1.05rem; margin-bottom: 8px; }
     .dialog p { color: var(--muted); font-size: .84rem; line-height: 1.7; margin-bottom: 14px; }
     .dialog input { width: 100%; margin-bottom: 14px; }
+    .dialog .check-line input[type="checkbox"] { width: 18px; height: 18px; margin: 1px 0 0; }
     .dialog .row { justify-content: flex-end; }
     .dialog.confirm-dialog { width: min(620px, 100%); }
     .confirm-files {
@@ -158,6 +170,7 @@
             <span class="who" id="whoami">加载中…</span>
             <a href="/" id="homeLink">前台</a>
             <a href="admin/profile" id="profileLink">个人信息</a>
+            <a href="admin/v2" id="v2Link">V2 图库</a>
             <a href="admin/review" id="reviewLink" hidden>审核</a>
             <a href="admin/setting" id="settingLink" hidden>设置</a>
             <a href="admin/users" id="usersLink" hidden>账户管理</a>
@@ -215,6 +228,10 @@
         <p id="uploadConfirmText">确认后才会开始上传。</p>
         <div class="confirm-files" id="uploadConfirmFiles"></div>
         <div class="confirm-summary" id="uploadConfirmSummary"></div>
+        <label class="check-line">
+            <input type="checkbox" id="uploadWatermarked">
+            <span>为通过 API 调用的图片添加可见水印和不可见水印；样式可在设置中修改。</span>
+        </label>
         <div class="row" style="margin-top:16px;">
             <button class="ghost" id="uploadCancel">取消</button>
             <button id="uploadConfirm">确认上传</button>
@@ -238,6 +255,10 @@
             <label>来源 / 画师链接</label>
             <input type="text" id="editSource">
         </div>
+        <label class="check-line">
+            <input type="checkbox" id="editWatermarked">
+            <span>接口输出时添加可见水印和不可见水印</span>
+        </label>
         <div class="row">
             <button class="ghost" id="editCancel">取消</button>
             <button id="editSave">保存</button>
@@ -248,10 +269,10 @@
 <script>
     const BASE = location.pathname.replace(/\/admin(\/.*)?$/, '');
     const API = BASE + '/admin/api';
-    const RANDOM_URL = location.origin + BASE + '/random';
 
     document.getElementById('settingLink').href = BASE + '/admin/setting';
     document.getElementById('usersLink').href = BASE + '/admin/users';
+    document.getElementById('v2Link').href = BASE + '/admin/v2';
     document.getElementById('reviewLink').href = BASE + '/admin/review';
     document.getElementById('profileLink').href = BASE + '/admin/profile';
     document.getElementById('homeLink').href = BASE + '/';
@@ -325,11 +346,27 @@
                 : '');
     };
 
+    const copyToken = () => currentUser ? (window.ImgApiToken?.get(currentUser.id) || '') : '';
+
+    const apiCopyUrl = (image) => {
+        const token = copyToken();
+        const type = token ? 'origin' : 'webp';
+        const base = location.origin + BASE + '/api/v1?id=' +
+            encodeURIComponent(image.id) + '&type=' + type;
+        return token ? base + '&token=' + encodeURIComponent(token) : base;
+    };
+
     const renderCards = (images) => {
         if (!images.length) {
             grid.innerHTML = '<div class="empty">还没有图片，先把壁纸拖进上面的框里 🐾</div>';
             return;
         }
+
+        const token = copyToken();
+        const hasCopyToken = Boolean(token);
+        const originalUrl = (image) => token
+            ? image.url + '?token=' + encodeURIComponent(token)
+            : image.url;
 
         grid.innerHTML = images.map((image) => {
             const thumb = image.webpUrl || image.url;
@@ -350,14 +387,18 @@
                     'onclick="window.open(\'' + esc(image.url) + '\',\'_blank\')">' +
                 '<div class="body">' +
                     '<div class="meta">' + badges(image) + owner +
+                        (image.watermarked ? '<span class="badge watermark">接口水印</span>' : '') +
                         '<span>' + image.width + '×' + image.height + '</span>' +
                         '<span>' + fmtSize(image.size) + '</span>' +
                         (image.webpSize ? '<span>webp ' + fmtSize(image.webpSize) + '</span>' : '<span>无 webp</span>') +
                     '</div>' +
                     (tags ? '<div class="tags">#' + esc(tags) + '</div>' : '') +
                     '<div class="actions">' +
+                        '<button class="mini ghost" data-copy-api="' + esc(image.id) + '">接口' +
+                            (hasCopyToken ? '（Token）' : '') + '</button>' +
                         (image.webpUrl ? '<button class="mini ghost" data-copy="' + esc(image.webpUrl) + '">WebP（推荐）</button>' : '') +
-                        '<button class="mini ghost" data-copy="' + esc(image.url) + '">原图</button>' +
+                        '<button class="mini ghost" data-copy="' + esc(originalUrl(image)) + '">原图' +
+                            (hasCopyToken ? '（Token）' : '') + '</button>' +
                         visibility +
                         actions +
                     '</div>' +
@@ -419,6 +460,7 @@
             source: $('source').value.trim()
         };
 
+        $('uploadWatermarked').checked = false;
         pendingUpload = { files: list, meta };
 
         $('uploadConfirmText').textContent =
@@ -438,6 +480,7 @@
         summary.push(meta.tags ? '标签：' + esc(meta.tags) : '标签：无');
         if (meta.title) summary.push('标题：' + esc(meta.title));
         if (meta.source) summary.push('来源：' + esc(meta.source));
+        summary.push('<span id="uploadWatermarkSummary">水印：关闭</span>');
         summary.push('上传后会进入<strong>待审核</strong>，审核通过后才会出现在图库。');
         $('uploadConfirmSummary').innerHTML = summary.join('<br>');
 
@@ -450,7 +493,8 @@
         const meta = metaOverride || {
             tags: $('tags').value,
             title: $('title').value,
-            source: $('source').value
+            source: $('source').value,
+            watermarked: $('uploadWatermarked').checked
         };
 
         const form = new FormData();
@@ -458,6 +502,7 @@
         form.append('tags', meta.tags || '');
         form.append('title', meta.title || '');
         form.append('source', meta.source || '');
+        form.append('watermarked', meta.watermarked ? '1' : '0');
 
         const bar = $('progress');
         bar.classList.add('on');
@@ -534,14 +579,27 @@
 
     $('uploadCancel').onclick = () => closeUploadConfirm();
 
+    $('uploadWatermarked').addEventListener('change', () => {
+        const label = $('uploadWatermarkSummary');
+        if (label) {
+            label.innerHTML = $('uploadWatermarked').checked
+                ? '水印：<strong>开启</strong>（仅 API 输出）'
+                : '水印：关闭';
+        }
+    });
+
     $('uploadConfirm').onclick = async () => {
         if (!pendingUpload) return;
 
         const { files, meta } = pendingUpload;
+        const uploadMeta = {
+            ...meta,
+            watermarked: $('uploadWatermarked').checked
+        };
         $('uploadConfirmOverlay').classList.remove('on');
         clearPendingUpload();
 
-        await uploadFiles(files, meta);
+        await uploadFiles(files, uploadMeta);
     };
 
     $('uploadConfirmOverlay').addEventListener('click', (event) => {
@@ -557,6 +615,11 @@
     grid.addEventListener('click', async (event) => {
         const target = event.target;
         if (target.dataset.copy) return copy(target.dataset.copy);
+        if (target.dataset.copyApi) {
+            const image = currentImages.find((item) => item.id === target.dataset.copyApi);
+            if (image) return copy(apiCopyUrl(image));
+            return;
+        }
 
         if (target.dataset.visible) {
             const visible = target.dataset.next === '1';
@@ -580,6 +643,7 @@
             $('editTags').value = (image.tags || []).join(', ');
             $('editTitle').value = image.title || '';
             $('editSource').value = image.source || '';
+            $('editWatermarked').checked = Boolean(image.watermarked);
             $('editOverlay').classList.add('on');
             return;
         }
@@ -644,7 +708,8 @@
                 json: {
                     tags: $('editTags').value,
                     title: $('editTitle').value,
-                    source: $('editSource').value
+                    source: $('editSource').value,
+                    watermarked: $('editWatermarked').checked
                 }
             });
             $('editOverlay').classList.remove('on');

@@ -14,15 +14,20 @@ import { adminRoutes } from './routes/admin.js';
 import {
     apiV1Handler,
     apiV1PngHandler,
+    apiV1RdHandler,
+    apiV2Handler,
+    apiV2PngHandler,
+    apiV2RdHandler,
     basePath,
+    getimgHandler,
     healthHandler,
     imageHandler,
     infoHandler,
     listHandler,
-    randomHandler,
     statsHandler,
     webpHandler
 } from './routes/public.js';
+import { avatarHandler } from './routes/avatar.js';
 
 const app = new Hono();
 
@@ -30,11 +35,20 @@ app.use('*', cors());
 app.use('*', logger());
 
 // —— 公开接口 ——
-app.get('/random', rateLimit, randomHandler);
+app.get('/api/v1rd', rateLimit, apiV1RdHandler);
+app.get('/api/v1rd/', rateLimit, apiV1RdHandler);
+app.get('/api/v2rd', rateLimit, apiV2RdHandler);
+app.get('/api/v2rd/', rateLimit, apiV2RdHandler);
 app.get('/api/v1', rateLimit, apiV1Handler);
 app.get('/api/v1/', rateLimit, apiV1Handler);
 app.get('/api/v1.png', rateLimit, apiV1PngHandler);
 app.get('/api/v1/random.png', rateLimit, apiV1PngHandler);
+app.get('/api/v2', rateLimit, apiV2Handler);
+app.get('/api/v2/', rateLimit, apiV2Handler);
+app.get('/api/v2.png', rateLimit, apiV2PngHandler);
+app.get('/api/v2/random.png', rateLimit, apiV2PngHandler);
+app.get('/api/getimg', getimgHandler);
+app.get('/api/avatar', avatarHandler);
 app.get('/i/:name', imageHandler);
 app.get('/w/:name', webpHandler);
 app.get('/list', rateLimit, listHandler);
@@ -74,8 +88,11 @@ app.notFound((c) =>
         message: '未找到接口',
         path: c.req.path,
         endpoints: {
-            random: '/random',
+            random: '/api/v1rd',
+            curatedRandom: '/api/v2rd',
             api: '/api/v1',
+            curated: '/api/v2',
+            avatar: '/api/avatar?user={username}',
             origin: '/i/{file}',
             webp: '/w/{file}',
             list: '/list',
@@ -118,7 +135,7 @@ const start = async () => {
         console.log('🖼️  图床服务已启动');
         console.log(`📡 本地地址: http://localhost:${port}`);
         console.log(`📡 网络地址: http://${localIP}:${port}`);
-        console.log(`🎲 随机图接口: http://localhost:${port}/random`);
+        console.log(`🎲 随机图接口: http://localhost:${port}/api/v1rd`);
         console.log(`🔧 管理后台:   http://localhost:${port}/admin`);
         console.log('');
         console.log('🔐 账户系统: 用户名 + 密码（首次打开后台创建站长）');

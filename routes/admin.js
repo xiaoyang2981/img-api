@@ -83,6 +83,11 @@ const settingPayload = (user) => {
         rateLimitGuest: config.rateLimitGuest,
         rateLimitUser: config.rateLimitUser,
         tokenBanHours: config.tokenBanHours,
+        watermarkText: config.watermarkText,
+        watermarkOpacity: config.watermarkOpacity,
+        watermarkPosition: config.watermarkPosition,
+        watermarkSize: config.watermarkSize,
+        watermarkColor: config.watermarkColor,
         canEditPort: user?.role === 'owner'
     };
 };
@@ -94,6 +99,11 @@ const imagePayload = (c, image, user) => ({
     reviewer: image.reviewedBy ? (db.getUserById(image.reviewedBy)?.username || null) : null,
     status: image.status,
     visible: image.visible !== false,
+    v2Status: image.v2Status || 'none',
+    v2RequestedAt: image.v2RequestedAt || null,
+    v2Reviewer: image.v2ReviewedBy ? (db.getUserById(image.v2ReviewedBy)?.username || null) : null,
+    v2ReviewedAt: image.v2ReviewedAt || null,
+    v2ReviewNote: image.v2ReviewNote || '',
     reviewedAt: image.reviewedAt || null,
     reviewNote: image.reviewNote || '',
     canEdit: canEditImage(user, image)
@@ -133,6 +143,7 @@ const profilePayload = (user) => {
     return {
         user: {
             ...publicUser(user),
+            avatarImageId: user.avatarImageId || null,
             createdAt: user.createdAt,
             updatedAt: user.updatedAt,
             hasApiToken: Boolean(user.hasApiToken),
@@ -351,6 +362,14 @@ adminRoutes.get('/review', (c) => {
     if (!user) return redirectToLogin(c);
     if (!canReview(user.role)) return c.text('需要审核权限', 403);
     return servePage(c, 'review.html');
+});
+
+adminRoutes.get('/v2', (c) => {
+    const user = getAuthUser(c);
+    if (!user) return redirectToLogin(c);
+    if (user.role === 'moderator') return c.redirect(`${adminBase(c)}/admin/review`);
+    if (!['owner', 'admin', 'member'].includes(user.role)) return c.text('没有权限', 403);
+    return servePage(c, 'v2.html');
 });
 
 // —— 认证（公开）——
@@ -686,6 +705,150 @@ adminRoutes.post('/api/profile/token/revoke', requireAuth, async (c) => {
     return c.json({ profile: profilePayload(updated) });
 });
 
+adminRoutes.post('/api/profile/token/verify', requireAuth, async (c) => {
+    const user = c.get('user');
+    const body = await readJson(c);
+    const token = String(body.token || '').trim();
+
+    if (!token) {
+        return c.json({ error: true, message: 'Token 为空' }, 400);
+    }
+
+    const owner = db.getUserByApiToken(token);
+    if (!owner || owner.id !== user.id || owner.disabled || tokenBanActive(owner)) {
+        return c.json({ error: true, message: 'Token 已失效' }, 401);
+    }
+
+    return c.json({ ok: true });
+});
+
+// 浏览器没有保存完整 Token 时，允许用户重新生成一个并立即用于复制。
+// 旧 Token 会失效，前端会先做确认提示。
+adminRoutes.post('/api/profile/token/reissue', requireAuth, async (c) => {
+    const user = c.get('user');
+
+    if (tokenBanActive(user)) {
+        return c.json({ error: true, message: 'Token 已被临时封禁，暂时不能创建' }, 403);
+    }
+
+    if (user.hasApiToken) {
+        const revoked = db.revokeApiToken(user.id);
+        if (!revoked) return c.json({ error: true, message: '账户不存在' }, 404);
+    }
+
+    const issued = db.issueApiToken(user.id);
+    if (!issued) return c.json({ error: true, message: '账户不存在' }, 404);
+
+    return c.json({
+        token: issued.token,
+        hint: issued.hint,
+        createdAt: issued.createdAt,
+        profile: profilePayload(db.getUserById(user.id))
+    });
+});
+
+// —— 头像 ——
+
+adminRoutes.get('/api/profile/avatar-images', requireAuth, (c) => {
+    const user = c.get('user');
+    const images = index.getAll()
+        .filter((image) => image.ownerId === user.id && image.status !== 'rejected')
+        .reverse()
+        .slice(0, 200)
+        .map((image) => ({
+            ...decorate(c, image),
+            status: image.status,
+            visible: image.visible !== false,
+            watermarked: Boolean(image.watermarked),
+            selected: image.id === user.avatarImageId
+        }));
+
+    return c.json({
+        avatarImageId: user.avatarImageId || null,
+        images
+    });
+});
+
+adminRoutes.put('/api/profile/avatar', requireAuth, async (c) => {
+    const user = c.get('user');
+    const body = await readJson(c);
+    const imageId = String(body.imageId || '').trim();
+
+    if (!ID_PATTERN.test(imageId)) {
+        return c.json({ error: true, message: '图片 ID 格式不正确' }, 400);
+    }
+
+    const image = index.getById(imageId);
+    if (!image) {
+        return c.json({ error: true, message: '图片不存在' }, 404);
+    }
+    if (image.ownerId !== user.id && !['owner', 'admin'].includes(user.role)) {
+        return c.json({ error: true, message: '只能使用自己上传的图片作为头像' }, 403);
+    }
+    if (image.status === 'rejected') {
+        return c.json({ error: true, message: '已拒绝的图片不能作为头像' }, 400);
+    }
+
+    const updated = db.setUserAvatar(user.id, image.id);
+    return c.json({
+        profile: profilePayload(updated),
+        image: imagePayload(c, image, user)
+    });
+});
+
+adminRoutes.delete('/api/profile/avatar', requireAuth, async (c) => {
+    const user = c.get('user');
+    const updated = db.setUserAvatar(user.id, null);
+    return c.json({ profile: profilePayload(updated) });
+});
+
+adminRoutes.post('/api/profile/avatar/upload', requireAuth, async (c) => {
+    const user = c.get('user');
+    const config = getConfig();
+    const limit = config.maxUploadMB * 1024 * 1024;
+
+    let body;
+
+    try {
+        body = await c.req.parseBody({ all: true });
+    } catch {
+        return c.json({ error: true, message: '上传内容解析失败，请使用 multipart/form-data' }, 400);
+    }
+
+    const file = [body.file ?? []].flat().find((item) => item instanceof File);
+    if (!file) {
+        return c.json({ error: true, message: '没有收到头像文件（字段名应为 file）' }, 400);
+    }
+    if (file.size > limit) {
+        return c.json({ error: true, message: `超过 ${config.maxUploadMB}MB 限制` }, 400);
+    }
+
+    try {
+        const buffer = Buffer.from(await file.arrayBuffer());
+        const result = await store.addFromBuffer(buffer, {
+            tags: 'avatar',
+            title: '头像',
+            watermarked: false
+        }, user.id);
+
+        if (result.image.ownerId !== user.id && !['owner', 'admin'].includes(user.role)) {
+            return c.json({ error: true, message: '这张图片已经存在，不能设置为头像' }, 409);
+        }
+        if (result.image.status === 'rejected') {
+            return c.json({ error: true, message: '已拒绝的图片不能作为头像' }, 400);
+        }
+
+        const updated = db.setUserAvatar(user.id, result.image.id);
+        return c.json({
+            duplicate: result.duplicate,
+            profile: profilePayload(updated),
+            image: imagePayload(c, result.image, user)
+        });
+    } catch (error) {
+        return c.json({ error: true, message: error.message || '头像上传失败' }, 400);
+    }
+});
+
 // 兼容旧接口：现在同样需要当前邮箱验证码
 adminRoutes.post('/api/auth/password', requireAuth, updateProfilePassword);
 
@@ -825,10 +988,12 @@ adminRoutes.post('/api/upload', requireRoles('owner', 'admin', 'member'), async 
         return c.json({ error: true, message: '没有收到文件（字段名应为 file）' }, 400);
     }
 
+    const watermarked = [body.watermarked ?? ''].flat()[0] || '';
     const meta = {
         tags: [body.tags ?? ''].flat().join(','),
         title: [body.title ?? ''].flat()[0] || '',
-        source: [body.source ?? ''].flat()[0] || ''
+        source: [body.source ?? ''].flat()[0] || '',
+        watermarked: watermarked === '1' || watermarked === 'true'
     };
 
     const results = [];
@@ -879,6 +1044,9 @@ adminRoutes.patch('/api/images/:id', requireRoles('owner', 'admin', 'member'), a
     if (body.visible !== undefined && typeof body.visible !== 'boolean') {
         return c.json({ error: true, message: '前台展示状态格式不正确' }, 400);
     }
+    if (body.watermarked !== undefined && typeof body.watermarked !== 'boolean') {
+        return c.json({ error: true, message: '水印状态格式不正确' }, 400);
+    }
 
     const image = await index.updateImage(id, body);
     return c.json(imagePayload(c, image, user));
@@ -928,6 +1096,124 @@ adminRoutes.get('/api/stats', requireRoles('owner', 'admin', 'member'), (c) => {
     });
 });
 
+// —— V2 接口图库 ——
+
+adminRoutes.get('/api/v2/images', requireRoles('owner', 'admin', 'member'), (c) => {
+    const user = c.get('user');
+    const page = Math.max(1, Number(c.req.query('page')) || 1);
+    const pageSize = Math.min(120, Math.max(1, Number(c.req.query('pageSize')) || 24));
+    const keyword = (c.req.query('q') || '').trim().toLowerCase();
+    const filter = String(c.req.query('status') || 'all').toLowerCase();
+    const allowed = ['all', 'none', 'pending', 'approved', 'rejected'];
+
+    let eligible = index.getApproved();
+    if (user.role === 'member') {
+        eligible = eligible.filter((image) => image.ownerId === user.id);
+    }
+
+    const stats = index.v2Stats(eligible);
+    let pool = [...eligible];
+
+    if (allowed.includes(filter) && filter !== 'all') {
+        pool = pool.filter((image) => (image.v2Status || 'none') === filter);
+    }
+    if (keyword) {
+        pool = pool.filter((image) => {
+            const haystack = [image.id, image.title, image.source, ...(image.tags || [])].join(' ');
+            return haystack.toLowerCase().includes(keyword);
+        });
+    }
+
+    pool.reverse();
+    const total = pool.length;
+    const start = (page - 1) * pageSize;
+
+    return c.json({
+        total,
+        page,
+        pageSize,
+        pages: Math.ceil(total / pageSize) || 1,
+        stats,
+        canDirect: user.role === 'owner' || user.role === 'admin',
+        images: pool.slice(start, start + pageSize).map((image) => imagePayload(c, image, user))
+    });
+});
+
+adminRoutes.post('/api/v2/request/:id', requireRoles('owner', 'admin', 'member'), async (c) => {
+    const user = c.get('user');
+    const id = c.req.param('id');
+    if (!ID_PATTERN.test(id)) return c.json({ error: true, message: 'ID 格式不正确' }, 400);
+
+    const image = index.getById(id);
+    if (!image) return c.json({ error: true, message: '图片不存在' }, 404);
+    if (image.ownerId !== user.id) {
+        return c.json({ error: true, message: '只能提交自己上传的图片' }, 403);
+    }
+    if (image.status !== 'approved') {
+        return c.json({ error: true, message: '图片通过审核后才能提交 V2' }, 400);
+    }
+    if (image.v2Status === 'approved') {
+        return c.json({ error: true, message: '图片已经在 V2 接口中' }, 409);
+    }
+    if (image.v2Status === 'pending') {
+        return c.json({ error: true, message: '图片已经提交过 V2 申请' }, 409);
+    }
+
+    const updated = await index.setV2Status(id, 'pending');
+    return c.json(imagePayload(c, updated, user));
+});
+
+adminRoutes.delete('/api/v2/request/:id', requireRoles('owner', 'admin', 'member'), async (c) => {
+    const user = c.get('user');
+    const id = c.req.param('id');
+    if (!ID_PATTERN.test(id)) return c.json({ error: true, message: 'ID 格式不正确' }, 400);
+
+    const image = index.getById(id);
+    if (!image) return c.json({ error: true, message: '图片不存在' }, 404);
+    if (image.ownerId !== user.id) {
+        return c.json({ error: true, message: '只能取消自己的 V2 申请' }, 403);
+    }
+    if (image.v2Status !== 'pending') {
+        return c.json({ error: true, message: '当前图片没有待审核的 V2 申请' }, 400);
+    }
+
+    const updated = await index.setV2Status(id, 'none');
+    return c.json(imagePayload(c, updated, user));
+});
+
+adminRoutes.post('/api/v2/images/:id', requireRoles('owner', 'admin'), async (c) => {
+    const user = c.get('user');
+    const id = c.req.param('id');
+    if (!ID_PATTERN.test(id)) return c.json({ error: true, message: 'ID 格式不正确' }, 400);
+
+    const image = index.getById(id);
+    if (!image) return c.json({ error: true, message: '图片不存在' }, 404);
+    if (image.status !== 'approved') {
+        return c.json({ error: true, message: '只有已通过审核的图片才能加入 V2' }, 400);
+    }
+    if (image.v2Status === 'approved') {
+        return c.json({ error: true, message: '图片已经在 V2 接口中' }, 409);
+    }
+
+    const updated = await index.setV2Status(id, 'approved', user.id, '管理员直接加入');
+    return c.json(imagePayload(c, updated, user));
+});
+
+adminRoutes.delete('/api/v2/images/:id', requireRoles('owner', 'admin'), async (c) => {
+    const user = c.get('user');
+    const id = c.req.param('id');
+    if (!ID_PATTERN.test(id)) return c.json({ error: true, message: 'ID 格式不正确' }, 400);
+
+    const image = index.getById(id);
+    if (!image) return c.json({ error: true, message: '图片不存在' }, 404);
+    if (image.v2Status !== 'approved') {
+        return c.json({ error: true, message: '图片不在 V2 接口中' }, 400);
+    }
+
+    const updated = await index.setV2Status(id, 'none');
+    return c.json(imagePayload(c, updated, user));
+});
+
 // —— 审核 ——
 
 adminRoutes.get('/api/review', requireRoles('owner', 'admin', 'moderator'), (c) => {
@@ -948,8 +1234,58 @@ adminRoutes.get('/api/review', requireRoles('owner', 'admin', 'moderator'), (c) 
         pages: Math.ceil(total / pageSize) || 1,
         status: filter,
         stats: index.reviewStats(),
+        v2Stats: index.v2Stats(index.getApproved()),
         images: pool.slice(start, start + pageSize).map((image) => imagePayload(c, image, user))
     });
+});
+
+adminRoutes.get('/api/review/v2', requireRoles('owner', 'admin', 'moderator'), (c) => {
+    const user = c.get('user');
+    const page = Math.max(1, Number(c.req.query('page')) || 1);
+    const pageSize = Math.min(120, Math.max(1, Number(c.req.query('pageSize')) || 24));
+    const status = String(c.req.query('status') || 'pending').toLowerCase();
+    const filter = ['pending', 'approved', 'rejected'].includes(status) ? status : 'pending';
+
+    const pool = index.getAll()
+        .filter((image) => image.status === 'approved' && image.v2Status === filter)
+        .reverse();
+    const total = pool.length;
+    const start = (page - 1) * pageSize;
+
+    return c.json({
+        total,
+        page,
+        pageSize,
+        pages: Math.ceil(total / pageSize) || 1,
+        status: filter,
+        stats: index.reviewStats(),
+        v2Stats: index.v2Stats(index.getApproved()),
+        images: pool.slice(start, start + pageSize).map((image) => imagePayload(c, image, user))
+    });
+});
+
+adminRoutes.patch('/api/review/v2/:id', requireRoles('owner', 'admin', 'moderator'), async (c) => {
+    const user = c.get('user');
+    const id = c.req.param('id');
+    if (!ID_PATTERN.test(id)) return c.json({ error: true, message: 'ID 格式不正确' }, 400);
+
+    const body = await readJson(c);
+    const status = String(body.status || '').toLowerCase();
+    if (!['approved', 'rejected'].includes(status)) {
+        return c.json({ error: true, message: 'V2 审核状态不正确' }, 400);
+    }
+
+    const image = index.getById(id);
+    if (!image) return c.json({ error: true, message: '图片不存在' }, 404);
+    if (image.status !== 'approved') {
+        return c.json({ error: true, message: '图片未通过审核，不能加入 V2' }, 400);
+    }
+    if (image.v2Status !== 'pending') {
+        return c.json({ error: true, message: '当前图片没有待审核的 V2 申请' }, 400);
+    }
+
+    const updated = await index.setV2Status(id, status, user.id, body.note);
+    return c.json(imagePayload(c, updated, user));
 });
 
 adminRoutes.patch('/api/review/:id', requireRoles('owner', 'admin', 'moderator'), async (c) => {

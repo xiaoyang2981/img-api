@@ -7,7 +7,7 @@ export * from './lib/paths.js';
 const DEFAULT_CONFIG = {
     siteName: '梦星的小图床',       // 前台左上角显示的名称
     port: DEFAULT_PORT,           // 端口，环境变量 PORT 优先级更高
-    randomPreferWebp: true,       // /random 默认返回 webp
+    randomPreferWebp: true,       // /api/v1rd 默认返回 webp
     allowPublicList: false,       // /list 是否需要登录
     allowRegistration: true,      // 是否允许公开注册（注册的账户固定为成员）
     enableEmailVerification: false, // 开启后注册必须邮箱验证码，忘记密码通过邮箱重置
@@ -20,7 +20,12 @@ const DEFAULT_CONFIG = {
     maxUploadMB: 20,              // 单张图片大小上限
     rateLimitGuest: 200,          // 游客 GET 接口每分钟次数
     rateLimitUser: 2000,          // 注册用户 GET 接口每分钟次数
-    tokenBanHours: 12             // Token 触发滥用限制后的默认封禁小时数
+    tokenBanHours: 12,            // Token 触发滥用限制后的默认封禁小时数
+    watermarkText: '✨',          // 接口水印默认文字
+    watermarkOpacity: 0.35,       // 可见水印不透明度
+    watermarkPosition: 'bottom-right',
+    watermarkSize: 7,             // 水印大小，按短边百分比
+    watermarkColor: '#ffffff'
 };
 
 const coerce = {
@@ -39,7 +44,20 @@ const coerce = {
     maxUploadMB: (value) => Math.min(500, Math.max(1, Number(value) || 20)),
     rateLimitGuest: (value) => Math.min(1000000, Math.max(1, Number(value) || 200)),
     rateLimitUser: (value) => Math.min(1000000, Math.max(1, Number(value) || 2000)),
-    tokenBanHours: (value) => Math.min(8760, Math.max(1, Number(value) || 12))
+    tokenBanHours: (value) => Math.min(8760, Math.max(1, Number(value) || 12)),
+    watermarkText: (value) => String(value ?? '').trim().slice(0, 40) || '✨',
+    watermarkOpacity: (value) => {
+        const opacity = Number(value);
+        return Number.isFinite(opacity) ? Math.min(1, Math.max(0, opacity)) : 0.35;
+    },
+    watermarkPosition: (value) => {
+        const positions = ['top-left', 'top-right', 'bottom-left', 'bottom-right', 'center'];
+        return positions.includes(String(value)) ? String(value) : 'bottom-right';
+    },
+    watermarkSize: (value) => Math.min(30, Math.max(1, Number(value) || 7)),
+    watermarkColor: (value) => /^#[0-9a-f]{6}$/i.test(String(value || ''))
+        ? String(value)
+        : '#ffffff'
 };
 
 let config = { ...DEFAULT_CONFIG };

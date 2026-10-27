@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>V2 接口图库</title>
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    [hidden] { display: none !important; }
+    :root {
+        --bg: #12141a; --panel: rgba(255,255,255,.05); --panel-hover: rgba(255,255,255,.08);
+        --border: rgba(255,255,255,.12); --text: #e8ebf2; --muted: #8b93a7;
+        --accent: #50b7fe; --danger: #e74c3c; --ok: #2ecc71; --warn: #f1c40f;
+    }
+    body {
+        background: radial-gradient(1200px 600px at 20% -10%, #1b2740 0%, var(--bg) 55%);
+        color: var(--text); font-family: 'Segoe UI', 'Microsoft YaHei', -apple-system, sans-serif;
+        min-height: 100vh; padding: 24px;
+    }
+    a { color: var(--accent); text-decoration: none; }
+    .wrap { max-width: 1280px; margin: 0 auto; }
+    header { display: flex; justify-content: space-between; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 18px; }
+    h1 { font-size: 1.3rem; }
+    h1 span { color: var(--muted); font-size: .78rem; font-weight: 400; margin-left: 8px; }
+    .account { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: .82rem; color: var(--muted); }
+    .account .who b { color: var(--ok); }
+    .account .who .role { color: var(--muted); margin-left: 5px; }
+    .account .who .role.owner { color: #ffb86b; }
+    .account .who .role.admin { color: #6ee7a4; }
+    .account .who .role.moderator { color: #c8b4ff; }
+    .account .who .role.member { color: #8b93a7; }
+    .account a.active { color: var(--text); font-weight: 600; }
+    .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 18px; margin-bottom: 18px; }
+    .hint { color: var(--muted); font-size: .82rem; line-height: 1.8; }
+    .hint code { color: #a9dbff; background: rgba(80,183,254,.1); border: 1px solid rgba(80,183,254,.2); border-radius: 5px; padding: 1px 5px; }
+    .tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+    .tab {
+        font: inherit; font-size: .82rem; color: var(--muted); background: var(--panel);
+        border: 1px solid var(--border); border-radius: 10px; padding: 8px 12px; cursor: pointer;
+    }
+    .tab b { color: var(--text); margin-left: 4px; }
+    .tab.active { color: #fff; background: rgba(80,183,254,.18); border-color: rgba(80,183,254,.5); }
+    .tab.active b { color: #a9dbff; }
+    .toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+    .toolbar .left { display: flex; gap: 10px; flex-wrap: wrap; }
+    input[type=text] {
+        background: rgba(0,0,0,.25); color: var(--text); border: 1px solid var(--border);
+        border-radius: 9px; padding: 9px 12px; font: inherit; font-size: .86rem; outline: none; min-width: 240px;
+    }
+    input:focus { border-color: var(--accent); }
+    button { font: inherit; background: linear-gradient(45deg,#50b7fe,#3aa7fe); color: #fff; border: none; border-radius: 9px; padding: 8px 14px; font-size: .82rem; cursor: pointer; }
+    button:hover { filter: brightness(1.08); }
+    button:disabled { opacity: .5; cursor: not-allowed; }
+    button.ghost { background: var(--panel); border: 1px solid var(--border); color: var(--text); }
+    button.ghost:hover { background: var(--panel-hover); }
+    button.danger { background: rgba(231,76,60,.16); border: 1px solid rgba(231,76,60,.4); color: #ff8d80; }
+    button.mini { padding: 6px 10px; font-size: .76rem; }
+    .grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+    .card { background: var(--panel); border: 1px solid var(--border); border-radius: 13px; overflow: hidden; display: flex; flex-direction: column; }
+    .card img { display: block; width: 100%; aspect-ratio: 16/10; object-fit: cover; background: #0b0d12; cursor: zoom-in; }
+    .card .body { padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+    .meta { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; font-size: .73rem; color: var(--muted); }
+    .badge { font-size: .67rem; padding: 2px 8px; border-radius: 99px; border: 1px solid var(--border); }
+    .badge.approved, .badge.v2-approved { color: #6ee7a4; border-color: rgba(46,204,113,.4); background: rgba(46,204,113,.1); }
+    .badge.pending, .badge.v2-pending { color: #ffd75e; border-color: rgba(241,196,15,.4); background: rgba(241,196,15,.1); }
+    .badge.rejected, .badge.v2-rejected { color: #ff8d80; border-color: rgba(231,76,60,.4); background: rgba(231,76,60,.1); }
+    .badge.v2-none { color: var(--muted); }
+    .title { font-size: .88rem; font-weight: 600; line-height: 1.5; word-break: break-all; }
+    .sub { color: var(--muted); font-size: .74rem; line-height: 1.6; }
+    .tags { color: var(--accent); font-size: .73rem; line-height: 1.5; word-break: break-all; }
+    .actions { display: flex; gap: 7px; flex-wrap: wrap; margin-top: 3px; }
+    .empty { color: var(--muted); text-align: center; padding: 60px 10px; font-size: .88rem; }
+    .pager { display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 20px; }
+    .pager .info { color: var(--muted); font-size: .82rem; }
+    .toast {
+        position: fixed; left: 50%; bottom: 32px; transform: translate(-50%,20px);
+        background: #1e2430; border: 1px solid var(--border); padding: 10px 18px; border-radius: 10px;
+        font-size: .86rem; opacity: 0; pointer-events: none; transition: .25s; z-index: 80;
+    }
+    .toast.on { opacity: 1; transform: translate(-50%,0); }
+    .toast.err { border-color: rgba(231,76,60,.5); color: #ff9d92; }
+</style>
+<link rel="stylesheet" href="theme.css">
+<script src="theme.js"></script>
+</head>
+<body>
+<div class="wrap">
+    <header>
+        <h1>🧩 V2 接口图库 <span>只有这里加入的图片才会被 /api/v2 随机调用</span></h1>
+        <div class="account">
+            <span class="who" id="whoami">…</span>
+            <a href="/" id="homeLink">前台</a>
+            <a href="/admin/profile" id="profileLink">个人信息</a>
+            <a href="/admin" id="adminLink">返回后台</a>
+            <a href="/admin/v2" id="v2Link" class="active">V2 图库</a>
+            <a href="/admin/review" id="reviewLink" hidden>审核</a>
+            <a href="/admin/setting" id="settingLink" hidden>设置</a>
+            <a href="/admin/users" id="usersLink" hidden>账户管理</a>
+            <button class="theme-toggle" type="button" data-theme-toggle>☀️</button>
+            <button class="ghost mini" id="logoutBtn">退出登录</button>
+        </div>
+    </header>
+
+    <div class="panel">
+        <p class="hint" id="pageHint">正在读取账户信息…</p>
+    </div>
+
+    <div class="tabs" id="tabs">
+        <button class="tab active" data-status="all">全部 <b id="countAll">0</b></button>
+        <button class="tab" data-status="none">未提交 <b id="countNone">0</b></button>
+        <button class="tab" data-status="pending">待审核 <b id="countPending">0</b></button>
+        <button class="tab" data-status="approved">已加入 <b id="countApproved">0</b></button>
+        <button class="tab" data-status="rejected">已拒绝 <b id="countRejected">0</b></button>
+    </div>
+
+    <div class="toolbar">
+        <div class="left">
+            <input type="text" id="search" placeholder="搜索 id / 标题 / 标签…">
+            <button class="ghost" id="refreshBtn">刷新</button>
+        </div>
+    </div>
+
+    <div class="grid" id="grid"></div>
+    <div class="pager" id="pager"></div>
+
+    <footer class="site-footer">
+        <span>© <span data-year>2026</span> <span data-footer-site>梦星的小图床</span> · img-api</span>
+        <span>All rights reserved.</span>
+    </footer>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+    const BASE = location.pathname.replace(/\/admin(\/.*)?$/, '');
+    const API = BASE + '/admin/api';
+    const $ = (id) => document.getElementById(id);
+    const ROLE_LABELS = { owner: '站长', admin: '管理员', moderator: '审核员', member: '成员' };
+    const V2_LABELS = { none: '未提交', pending: '待审核', approved: '已加入', rejected: '已拒绝' };
+
+    $('homeLink').href = BASE + '/';
+    $('profileLink').href = BASE + '/admin/profile';
+    $('adminLink').href = BASE + '/admin';
+    $('v2Link').href = BASE + '/admin/v2';
+    $('reviewLink').href = BASE + '/admin/review';
+    $('settingLink').href = BASE + '/admin/setting';
+    $('usersLink').href = BASE + '/admin/users';
+
+    let currentUser = null;
+    let canDirect = false;
+    let status = 'all';
+    let page = 1;
+    let search = '';
+    let toastTimer = null;
+
+    const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (ch) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[ch]));
+
+    const toast = (message, isError = false) => {
+        const el = $('toast');
+        el.textContent = message;
+        el.className = 'toast on' + (isError ? ' err' : '');
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => { el.className = 'toast'; }, 2400);
+    };
+
+    const request = async (path, options = {}) => {
+        const headers = Object.assign({}, options.headers || {});
+        if (options.json !== undefined) {
+            headers['Content-Type'] = 'application/json';
+            options.body = JSON.stringify(options.json);
+        }
+        const response = await fetch(API + path, Object.assign({}, options, {
+            headers,
+            credentials: 'same-origin'
+        }));
+        if (response.status === 401) {
+            location.href = BASE + '/login';
+            throw new Error('登录已过期');
+        }
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.message || ('请求失败 ' + response.status));
+        return data;
+    };
+
+    const fmtDate = (value) => {
+        if (!value) return '-';
+        const date = new Date(value);
+        return Number.isNaN(date.getTime()) ? '-' : date.toLocaleString('zh-CN', { hour12: false });
+    };
+
+    const renderPager = (data) => {
+        if (data.pages <= 1) { $('pager').innerHTML = ''; return; }
+        $('pager').innerHTML =
+            '<button class="ghost mini" id="prevBtn" ' + (data.page <= 1 ? 'disabled' : '') + '>上一页</button>' +
+            '<span class="info">' + data.page + ' / ' + data.pages + '</span>' +
+            '<button class="ghost mini" id="nextBtn" ' + (data.page >= data.pages ? 'disabled' : '') + '>下一页</button>';
+        $('prevBtn').onclick = () => { page = Math.max(1, page - 1); load(); };
+        $('nextBtn').onclick = () => { page = Math.min(data.pages, page + 1); load(); };
+    };
+
+    const cardActions = (image) => {
+        if (canDirect) {
+            return image.v2Status === 'approved'
+                ? '<button class="danger mini" data-remove="' + esc(image.id) + '">移出 V2</button>'
+                : '<button class="mini" data-add="' + esc(image.id) + '">' +
+                    (image.v2Status === 'pending' ? '通过并加入 V2' : '加入 V2') + '</button>';
+        }
+
+        if (image.v2Status === 'pending') {
+            return '<button class="ghost mini" data-cancel="' + esc(image.id) + '">取消申请</button>';
+        }
+        if (image.v2Status === 'approved') {
+            return '<span class="hint">已加入 V2</span>';
+        }
+        return '<button class="mini" data-request="' + esc(image.id) + '">' +
+            (image.v2Status === 'rejected' ? '重新提交 V2' : '提交到 V2') + '</button>';
+    };
+
+    const render = (data) => {
+        canDirect = Boolean(data.canDirect);
+        const stats = data.stats || {};
+        $('countAll').textContent = Object.values(stats).reduce((sum, value) => sum + Number(value || 0), 0);
+        $('countNone').textContent = stats.none ?? 0;
+        $('countPending').textContent = stats.pending ?? 0;
+        $('countApproved').textContent = stats.approved ?? 0;
+        $('countRejected').textContent = stats.rejected ?? 0;
+
+        if (!data.images.length) {
+            const labels = {
+                all: canDirect ? '还没有已通过审核的图片' : '你还没有已通过审核的图片',
+                none: '没有未提交的图片',
+                pending: '没有待审核的 V2 申请',
+                approved: '还没有图片加入 V2',
+                rejected: '没有被拒绝的 V2 申请'
+            };
+            $('grid').innerHTML = '<div class="empty">' + (labels[status] || '没有图片') + '</div>';
+            $('pager').innerHTML = '';
+            return;
+        }
+
+        $('grid').innerHTML = data.images.map((image) => {
+            const thumb = image.webpUrl || image.url;
+            const tags = (image.tags || []).join(', ');
+            return '<div class="card">' +
+                '<img src="' + esc(thumb) + '" alt="' + esc(image.id) + '" loading="lazy" ' +
+                    'onclick="window.open(\'' + esc(image.url) + '\',\'_blank\')">' +
+                '<div class="body">' +
+                    '<div class="meta">' +
+                        '<span class="badge approved">已通过审核</span>' +
+                        '<span class="badge v2-' + esc(image.v2Status || 'none') + '">V2 · ' +
+                            (V2_LABELS[image.v2Status] || image.v2Status || '未提交') + '</span>' +
+                    '</div>' +
+                    '<div class="title">' + esc(image.title || image.id) + '</div>' +
+                    '<div class="sub">上传者：' + esc(image.owner || '未知') + ' · ' + esc(fmtDate(image.createdAt)) + '</div>' +
+                    '<div class="sub">' + image.width + '×' + image.height +
+                        (image.v2ReviewedAt ? ' · 审核于 ' + esc(fmtDate(image.v2ReviewedAt)) : '') + '</div>' +
+                    (tags ? '<div class="tags">#' + esc(tags) + '</div>' : '') +
+                    (image.v2ReviewNote ? '<div class="sub">V2 备注：' + esc(image.v2ReviewNote) + '</div>' : '') +
+                    '<div class="actions">' + cardActions(image) + '</div>' +
+                '</div>' +
+            '</div>';
+        }).join('');
+
+        renderPager(data);
+    };
+
+    const load = async () => {
+        try {
+            const data = await request('/v2/images?status=' + encodeURIComponent(status) +
+                '&page=' + page + '&pageSize=24&q=' + encodeURIComponent(search));
+            render(data);
+        } catch (error) {
+            toast(error.message, true);
+        }
+    };
+
+    const act = async (path, method, success) => {
+        try {
+            await request(path, { method });
+            toast(success);
+            await load();
+        } catch (error) {
+            toast(error.message, true);
+        }
+    };
+
+    $('grid').addEventListener('click', (event) => {
+        const target = event.target;
+        if (target.dataset.add) return act('/v2/images/' + target.dataset.add, 'POST', '已加入 V2 接口');
+        if (target.dataset.remove) {
+            if (!confirm('确定将这张图片移出 V2 接口吗？')) return;
+            return act('/v2/images/' + target.dataset.remove, 'DELETE', '已移出 V2 接口');
+        }
+        if (target.dataset.request) return act('/v2/request/' + target.dataset.request, 'POST', 'V2 申请已提交');
+        if (target.dataset.cancel) return act('/v2/request/' + target.dataset.cancel, 'DELETE', 'V2 申请已取消');
+    });
+
+    document.querySelectorAll('.tab').forEach((tab) => {
+        tab.onclick = () => {
+            status = tab.dataset.status;
+            page = 1;
+            document.querySelectorAll('.tab').forEach((item) => item.classList.toggle('active', item === tab));
+            load();
+        };
+    });
+
+    $('search').addEventListener('input', () => {
+        clearTimeout(window.__v2SearchTimer);
+        window.__v2SearchTimer = setTimeout(() => {
+            search = $('search').value.trim();
+            page = 1;
+            load();
+        }, 300);
+    });
+
+    $('refreshBtn').onclick = load;
+
+    $('logoutBtn').onclick = async () => {
+        try {
+            await request('/auth/logout', { method: 'POST' });
+        } catch {
+            // ignore
+        }
+        location.href = BASE + '/login';
+    };
+
+    const boot = async () => {
+        try {
+            const me = await request('/auth/me');
+            currentUser = me.user;
+
+            if (!['owner', 'admin', 'member'].includes(currentUser.role)) {
+                location.href = BASE + '/admin/review';
+                return;
+            }
+
+            const canManage = currentUser.role === 'owner' || currentUser.role === 'admin';
+            $('whoami').innerHTML = '<b>' + esc(currentUser.displayName || currentUser.username) + '</b> · ' +
+                '<span class="role ' + esc(currentUser.role) + '">' + (ROLE_LABELS[currentUser.role] || currentUser.role) + '</span>';
+            $('reviewLink').hidden = !canManage && currentUser.role !== 'moderator';
+            $('settingLink').hidden = !canManage;
+            $('usersLink').hidden = !canManage;
+            $('pageHint').innerHTML = canManage
+                ? '站长/管理员可以直接将符合条件的已审核图片加入或移出 <code>/api/v2</code>，也可以处理成员提交的申请。'
+                : '选择自己上传且已通过审核的图片提交到 <code>/api/v2</code>。提交后需要审核员、管理员或站长审核，通过后才会被接口调用。';
+
+            try {
+                const settings = await request('/settings');
+                document.title = (settings.siteName || '梦星的小图床') + ' · V2 接口图库';
+                document.querySelectorAll('[data-footer-site]').forEach((el) => {
+                    el.textContent = settings.siteName || '梦星的小图床';
+                });
+            } catch {
+                // 标题不是关键
+            }
+
+            await load();
+        } catch (error) {
+            toast(error.message, true);
+        }
+    };
+
+    boot();
+</script>
+</body>
+</html>

@@ -6,7 +6,7 @@
 - 端口默认 `2618`，可用环境变量 `PORT` 覆盖
 - 所有路径都基于项目目录，**整个文件夹移动到别处也能直接跑**
 - 账户、会话、图片索引和设置都存在 SQLite：`data/img-api.db`
-- 图片文件仍存 `data/images/` 和 `data/webp/`
+- 图片文件存 `data/images/` 和 `data/webp/`；API 水印缓存存 `data/watermarks/`
 
 ## 启动
 
@@ -62,8 +62,10 @@ $env:PORT=3000; node server.js
 - 修改已绑定邮箱：验证码发送到当前邮箱，确认后才能改成新邮箱
 - 修改密码：需要当前密码 + 当前邮箱验证码；成功后其他设备的登录会失效
 - 创建/吊销 API Token；创建时只在弹窗中显示一次
+- 创建成功后当前浏览器会保存 Token，复制 API 地址时自动带上；换浏览器或本机 Token 失效时，复制前会确认重新生成 Token（旧 Token 失效）
 - 吊销后需要重新点击「创建 Token」生成，旧 Token 立即失效
 - 查看 Token 尾号、创建时间、限流触发次数和封禁状态
+- 上传头像或从自己的图片中选择头像；头像接口默认输出 JPG，支持 `?type=png`
 - 未绑定邮箱时不能修改密码，需要先绑定邮箱
 - 邮箱或密码修改需要 SMTP 已配置；未配置时页面会提示并暂时禁用相关操作
 - 站长/管理员在 `/admin/users` 为其他账户重置密码或设置邮箱；自己的邮箱和密码必须在个人信息页修改
@@ -72,22 +74,36 @@ $env:PORT=3000; node server.js
 
 1. 成员/管理员/站长上传图片，或管理员扫描目录，图片状态为 `pending`（待审核）
 2. 审核员/管理员/站长在 `/admin/review` 审核
-3. 「通过」后状态变为 `approved`，才会出现在 `/random`、`/list`、`/stats` 和前台
+3. 「通过」后状态变为 `approved`，才会出现在 `/api/v1rd`、`/api/v1`、`/list`、`/stats` 和前台；`/api/v2` 还需要单独加入 V2 图库
 4. 「拒绝」后状态为 `rejected`，不进入图库，但上传者仍能在后台上看到
 5. 未审核/被拒绝的图片，匿名访问 `/i`、`/w` 会返回 404；上传者、审核员、管理员、站长可以预览
 6. 从 0.1.0 迁移过来的旧图片默认视为 `approved`
 
-后台选择或拖入图片后不会立即上传，会先弹出确认框，显示待上传缩略图、标签、标题和来源；点「确认上传」后才真正开始上传。
+后台选择或拖入图片后不会立即上传，会先弹出确认框，显示待上传缩略图、标签、标题和来源，并可勾选「接口水印」；点「确认上传」后才真正开始上传。
+
+接口水印只作用于通过 API 输出的图片：一张可见水印（默认右下角 `✨`，透明度和样式可在设置页调整）和一条不可见的 EXIF 标识。随机图、公开图片接口和头像接口都会遵循该开关；直接访问 `/i`、`/w` 不添加水印。
 
 ### 前台展示开关
 
 每张已通过审核的图片在后台卡片下方有「隐藏前台 / 显示前台」按钮：
 
-- 隐藏后不会出现在前台首页、`/random`、`/api/v1`、`/list`、`/stats`
-- 隐藏图片的直链和 `/info` 对匿名访客返回 404；上传者、审核员、管理员和站长仍可预览
-- 前台图片数量、标签和体积统计会自动排除隐藏图片
+- 隐藏只影响前台首页展示，不会影响 `/api/v1rd`、`/api/v1`、`/api/v2`、`/list`、`/stats`、`/info` 或 `/i`、`/w` 直链
+- 前台首页使用内部图片出口，只选择未隐藏的图片；该出口不列入公开 API
+- 隐藏状态不会改变接口、统计或直链对已通过审核图片的开放程度
 - 新图片默认在前台展示；审核状态变化不会自动改变这个开关
 - 上传者可以控制自己的图片，管理员/站长可以控制所有图片
+
+### V2 接口图库
+
+`/api/v2` 使用独立的 V2 图库，不会直接调用全部已审核图片：
+
+- 成员在 `/admin/v2` 选择自己已通过审核的图片提交，状态变为 `pending`
+- 管理员/站长可以直接把已审核图片加入或移出 V2 图库
+- 审核员/管理员/站长在 `/admin/review` 的「V2 接口审核」中处理成员申请
+- 只有 `v2Status=approved` 的图片会进入 `/api/v2`
+- `/api/v2rd` 从 V2 图库随机并返回 302 跳转
+- 隐藏前台和 V2 图库互不影响
+- V2 审核通过/拒绝会记录审核人和备注
 
 ### 邮箱验证
 
@@ -111,7 +127,9 @@ SMTP 配置保存在 SQLite 的 `settings` 表；QQ/163 邮箱通常需要使用
 - 左上角站点名称可在 `/admin/setting` 修改，默认「梦星的小图床」
 - 所有页面支持深色/浅色切换，默认跟随系统，选择会保存在浏览器
 - 页面底部显示站点版权信息
-- 点图片或「换一张」会重新请求 `/random?format=json`，每次随机取图
+- 点图片或「换一张」会重新请求前台内部图片出口，每次从允许前台展示的图片中随机取图
+- 首页图片通过内部出口输出，不再直接使用原图直链
+- 登录且当前浏览器保存了 Token 时，「复制 API」会自动附带自己的 Token
 - 图库为空时显示占位提示；登录后首页按钮会变成「进入后台」
 - `/login` 登录，`/register` 注册（注册功能可在设置里关闭）
 - `/docs` 使用文档：面向访客、成员、API 用户和管理员的完整操作说明
@@ -122,26 +140,27 @@ SMTP 配置保存在 SQLite 的 `settings` 表；QQ/163 邮箱通常需要使用
 
 | 接口 | 说明 |
 |---|---|
-| `GET /random` | 随机一张，302 跳转（默认 WebP） |
-| `GET /random?format=json` | 返回 JSON，含 `url` / `origin` / `webp` |
-| `GET /random?type=origin` | 强制返回原图 |
-| `GET /random?tag=wolf` | 只从带 `wolf` 标签的图片里随机 |
-| `GET /random?tag=wolf,dragon` | 从带 `wolf` **或** `dragon` 的图片里随机 |
-| `GET /random?tag=wolf,dragon&tagMode=all` | 只从同时带 `wolf` 和 `dragon` 的图片里随机 |
-| `GET /api/v1` | **直接返回图片字节，不 302**；支持同样的 `tag` / `tagMode` / `type` / `format=json` |
+| `GET /api/v1rd` | 随机一张，302 跳转；包含已通过图片（含前台隐藏） |
+| `GET /api/v1rd?format=json` | 返回 JSON，含 `url` / `origin` / `webp` / `watermarked` |
+| `GET /api/v1rd?type=origin` | 携带有效 Token/会话时返回原图，否则降级为 WebP |
+| `GET /api/v2rd` | V2 图库随机一张，302 跳转到对应的 `/api/v2?id=...` |
+| `GET /api/v1` | **直接返回图片字节，不 302**；包含已通过图片（含隐藏）；可用 `id` 指定单张 |
 | `GET /api/v1?type=png` | 把选中图片转成 PNG 后直接返回，兼容只支持 PNG 的客户端 |
 | `GET /api/v1.png` | 同上，URL 带 `.png` 后缀，兼容对扩展名敏感的客户端 |
-| `GET /i/{file}` | 原图，`Cache-Control: immutable` |
+| `GET /api/v2` | 随机图，只从 V2 接口图库中已加入的图片取图 |
+| `GET /api/v2.png` | V2 图库随机 PNG |
+| `GET /api/avatar?user={username}&type=jpg\|png` | 头像服务，默认 JPG；省略用户时使用当前用户或站长 |
+| `GET /i/{file}` | 原图直链；未认证会跳转到 WebP，需 Token/会话，响应为私有缓存 |
 | `GET /w/{file}` | WebP 版本 |
 | `GET /list?page=1&pageSize=40&q=&tag=&tagMode=` | 分页列表（默认需要登录或 API Token） |
 | `GET /info/{id}` | 单张图片信息 |
-| `GET /stats` | 前台可展示图片的数量、标签与体积统计（不含隐藏图片） |
+| `GET /stats` | 全部已通过审核图片的数量、标签与体积统计 |
 | `GET /health` | 健康检查 |
 | `GET /docs` | 前台使用文档（公开页面） |
 
 ### API 速率限制与 Token
 
-`/random`、`/api/v1`、`/api/v1.png`、`/api/v1/random.png`、`/list` 使用 60 秒窗口限流：
+`/api/v1rd`、`/api/v2rd`、`/api/v1`、`/api/v1.png`、`/api/v1/random.png`、`/api/v2`、`/api/v2.png`、`/api/v2/random.png`、`/list` 使用 60 秒窗口限流：
 
 | 身份 | 默认额度 | 统计方式 |
 |---|---:|---|
@@ -156,14 +175,15 @@ SMTP 配置保存在 SQLite 的 `settings` 表；QQ/163 邮箱通常需要使用
   ```text
   Authorization: Bearer img_xxxxxxxx
   X-API-Token: img_xxxxxxxx
-  /random?token=img_xxxxxxxx
+  /api/v1rd?token=img_xxxxxxxx
   ```
 - 没带 Token 时：已登录会话按注册用户计算，否则按游客计算
+- 未认证请求只能获取 WebP；`type=origin` 需要有效 Token 或登录会话
 - 带错 Token 会直接返回 `401 Token 无效`
 - 速率超限返回 `429`，并带 `Retry-After`、`X-RateLimit-Limit`、`X-RateLimit-Remaining`、`X-RateLimit-Reset`
 - 游客和注册用户额度可在 `/admin/setting` 修改；站长固定额度不在设置页显示
 - 限流计数在内存中，服务重启后清零
-- `/i/{file}`、`/w/{file}` 是长期缓存的图片直链，不打限流，避免破坏外链；限流针对随机取图和列表接口
+- `/w/{file}` 是长期缓存的公开图片直链，不打限流；`/i/{file}` 原图需要 Token/会话且使用私有缓存；`/api/avatar` 也不做随机限流
 
 ### Token 临时封禁
 
@@ -248,22 +268,23 @@ curl -X POST http://localhost:2618/admin/api/upload \
 
 评级系统已移除，标签是唯一的分类方式，并且始终启用。
 
-- `/random?tag=wolf`：只取带 `wolf` 标签的图
-- `/random?tag=wolf,dragon`：默认取带 `wolf` **或** `dragon` 的图
-- `/random?tag=wolf,dragon&tagMode=all`：只取同时带这两个标签的图
+- `/api/v1rd?tag=wolf`：只取带 `wolf` 标签的图
+- `/api/v1rd?tag=wolf,dragon`：默认取带 `wolf` **或** `dragon` 的图
+- `/api/v1rd?tag=wolf,dragon&tagMode=all`：只取同时带这两个标签的图
+- `/api/v2?tag=...&tagMode=...` 使用相同规则，只从 V2 接口图库中已加入的图片取图
 - `/list?tag=...&tagMode=...` 使用相同规则
 - 标签在上传/编辑时填写，逗号分隔；自动转小写、去重
 
 ### 无法跟随 302 的客户端
 
-`/random` 默认返回 302 跳转。如果客户端不能跟随跳转，用 `/api/v1`，它直接返回图片字节：
+`/api/v1rd` 默认返回 302 跳转。如果客户端不能跟随跳转，用 `/api/v1`，它直接返回图片字节：
 
 ```bash
 # 保存一张随机 WebP
 curl -o random.webp "http://localhost:2618/api/v1"
 
-# 只取带 wolf 标签的图，要原图
-curl -o random.png "http://localhost:2618/api/v1?tag=wolf&type=origin"
+# 带 Token 取带 wolf 标签的原图（不带 Token 会降级为 WebP）
+curl -o random.png "http://localhost:2618/api/v1?tag=wolf&type=origin&token=img_xxxxxxxx"
 
 # 多标签：默认任意匹配，tagMode=all 要求全部匹配
 curl -o random.webp "http://localhost:2618/api/v1?tag=wolf,dragon&tagMode=all"
@@ -272,10 +293,22 @@ curl -o random.webp "http://localhost:2618/api/v1?tag=wolf,dragon&tagMode=all"
 curl "http://localhost:2618/api/v1?format=json"
 ```
 
+网站背景建议使用 V2 接口图库，只返回已加入 V2 的图片：
+
+```bash
+curl -o background.webp "http://localhost:2618/api/v2"
+```
+
 也可以直接用于 `<img>`：
 
+V2 图库也可以使用随机跳转接口：
+
+```bash
+curl -L "http://localhost:2618/api/v2rd?tag=wolf"
+```
+
 ```html
-<img src="http://your-host:2618/api/v1?tag=wolf">
+<img src="http://your-host:2618/api/v2?tag=wolf">
 ```
 
 ### HMCL 等不支持 WebP 的客户端
@@ -285,10 +318,11 @@ HMCL 支持网络背景图片，HTTP 和 HTTPS 都可以，**没有 HTTPS 不一
 1. 先用带 `.png` 后缀的地址，避开 WebP 和扩展名识别问题：
    ```text
    http://your-host:2618/api/v1.png
+   http://your-host:2618/api/v2.png
    http://your-host:2618/api/v1.png?token=img_xxxxxxxx
    http://your-host:2618/api/v1?type=png&token=img_xxxxxxxx
    ```
-   把 `img_xxxxxxxx` 换成「个人信息」页里的 API Token 可以使用注册用户速率；不带 Token 时按游客速率。
+   把 `img_xxxxxxxx` 换成「个人信息」页里的 API Token 可以使用注册用户速率；不带 Token 时按游客速率，PNG 会从 WebP 转换，不能获取原图。
 2. 确认 HMCL 所在机器能访问该地址，并且端口没有被防火墙拦截。
 3. HMCL 默认会缓存网络背景图片，同一个 URL 可能一直使用第一次下载的图；如果一直不显示，可以关闭网络背景缓存，或换一个 URL 参数再试。
 4. 如果仍然失败，查看 HMCL 日志里是否有背景图片加载错误。
@@ -302,7 +336,12 @@ HMCL 支持网络背景图片，HTTP 和 HTTPS 都可以，**没有 HTTPS 不一
 | 字段 | 默认 | 说明 |
 |---|---|---|
 | `siteName` | `梦星的小图床` | 前台左上角显示的名称，可在设置页修改 |
-| `randomPreferWebp` | `true` | `/random` 默认跳 WebP |
+| `randomPreferWebp` | `true` | `/api/v1rd` 默认跳 WebP；关闭后带 Token 的请求默认取原图，未认证仍强制 WebP |
+| `watermarkText` | `✨` | 接口水印默认文字 |
+| `watermarkOpacity` | `0.35` | 可见水印不透明度，0–1 |
+| `watermarkPosition` | `bottom-right` | 水印位置 |
+| `watermarkSize` | `7` | 水印大小，按短边百分比 |
+| `watermarkColor` | `#ffffff` | 水印颜色 |
 | `allowPublicList` | `false` | `/list` 是否需要登录 |
 | `allowRegistration` | `true` | 是否允许前台公开注册；关闭后注册按钮隐藏，接口返回 403 |
 | `enableEmailVerification` | `false` | 开启后注册必须邮箱验证码，忘记密码通过邮箱重置（仅站长可改） |
@@ -318,7 +357,7 @@ HMCL 支持网络背景图片，HTTP 和 HTTPS 都可以，**没有 HTTPS 不一
 | `maxUploadMB` | `20` | 单张上限 |
 | `port` | `2618` | 端口（`PORT` 环境变量优先；仅站长可修改） |
 
-标签始终启用；`/random` 和 `/list` 都支持按标签筛选。
+标签始终启用；`/api/v1rd`、`/api/v1`、`/api/v2` 和 `/list` 都支持按标签筛选。
 
 ## 数据与备份
 
@@ -328,6 +367,7 @@ HMCL 支持网络背景图片，HTTP 和 HTTPS 都可以，**没有 HTTPS 不一
 data/img-api.db       # SQLite：账户、会话、图片元数据、设置
 data/images/          # 原图
 data/webp/            # WebP 副本
+data/watermarks/      # API 水印缓存（可删除，按需重建）
 ```
 
 备份建议先停服务，再复制 `data/img-api.db`、`data/images/`、`data/webp/`。运行中也可以用 SQLite 的在线备份：
@@ -394,17 +434,18 @@ location /img/ {
 
 ### Cloudflare 缓存建议
 
-图片直链已经发送长期缓存和 Cloudflare 可识别的响应头：
+WebP 直链 `/w/*` 会发送长期公共缓存和 Cloudflare 可识别的响应头；原图 `/i/*` 使用私有缓存：
 
-- `Cache-Control: public, max-age=31536000, immutable`
+- `/w/*`：`Cache-Control: public, max-age=31536000, immutable`
+- `/i/*`：`Cache-Control: private, max-age=3600`
 - `CDN-Cache-Control` / `Cloudflare-CDN-Cache-Control`
 - `ETag` 和 `Last-Modified`
 
 在 Cloudflare 中建议配置：
 
 1. 开启代理，SSL/TLS 使用 **Full (strict)**。
-2. 为 `/i/*` 和 `/w/*` 添加 Cache Rule，启用缓存；Edge TTL 可设为 1 年，Browser TTL 选择 Respect origin。
-3. `/random`、`/api/v1`、`/api/v1.png`、`/list`、`/info`、`/stats` 保持不缓存，避免随机图和用户列表被 CDN 缓存。
+2. 为 `/w/*` 添加 Cache Rule，启用缓存；Edge TTL 可设为 1 年，Browser TTL 选择 Respect origin。`/i/*` 原图可能携带 Token，响应为私有缓存，不要让公共 CDN 缓存原图。
+3. `/api/v1rd`、`/api/v1`、`/api/v1.png`、`/api/v2`、`/api/v2.png`、`/list`、`/info`、`/stats` 保持不缓存，避免随机图和用户列表被 CDN 缓存。
 4. 启用 Brotli；图片请求优先使用 `/w/...webp` 或 `/api/v1.png`，不要在图片直链后加无意义的随机参数。
 5. 如果使用 Nginx 再转发到 Node，确保传递 `Host`、`X-Forwarded-Proto`，并保留 Cloudflare 的 `CF-Visitor` 请求头。
 
@@ -435,17 +476,17 @@ GitHub 仓库地址：`https://github.com/xiaoyang2981/img-api`
 
 ## 接入其他服务
 
-`/random` 天然适合被别的站点当图源。例如把它接回 Meting 首页的背景图：
+`/api/v2` 天然适合被别的站点当网站背景图源，它只返回已加入 V2 图库的图片。例如接回 Meting 首页：
 
 ```bash
 # 在 Meting 项目里
-BG_REMOTE_API="http://127.0.0.1:2618/random" node.exe node.js
+BG_REMOTE_API="http://127.0.0.1:2618/api/v2" node.exe node.js
 ```
 
 或者前端直接引用：
 
 ```html
-<img src="http://your-host:2618/random">
+<img src="http://your-host:2618/api/v2">
 ```
 
 ## 安全说明
@@ -454,6 +495,8 @@ BG_REMOTE_API="http://127.0.0.1:2618/random" node.exe node.js
 - 会话令牌只存 SHA-256 哈希；Cookie 为 HttpOnly + SameSite=Lax
 - 只接受 png / jpg / webp / gif / avif，拒绝 SVG（避免脚本注入）
 - 图片文件名限制为十六进制 ID + 扩展名，挡掉路径穿越
+- 未携带有效 Token 或登录会话时，所有图片接口只能输出 WebP，原图直链会跳转到 WebP 出口
+- 原图访问、接口水印和头像接口都会校验账户/图片状态；前台隐藏只影响首页展示，不作为私有权限
 
 ## 许可证
 

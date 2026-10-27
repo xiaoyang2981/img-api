@@ -27,8 +27,35 @@
     .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 20px; margin-bottom: 18px; }
     h2 { font-size: .98rem; }
     .identity-panel { padding: 18px 20px; }
-    .identity { display: flex; align-items: center; min-width: 0; }
+    .identity { display: flex; align-items: center; min-width: 0; gap: 14px; }
     .identity-copy { min-width: 0; }
+    .avatar {
+        width: 64px; height: 64px; flex: none; object-fit: cover;
+        border-radius: 18px; border: 1px solid var(--border);
+        background: rgba(0, 0, 0, .2);
+    }
+    .avatar-row { display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap; }
+    .avatar-large {
+        width: 112px; height: 112px; flex: none; object-fit: cover;
+        border-radius: 26px; border: 1px solid var(--border);
+        background: rgba(0, 0, 0, .2); box-shadow: 0 12px 28px rgba(0, 0, 0, .16);
+    }
+    .avatar-fields { flex: 1; min-width: 250px; }
+    .avatar-api-line {
+        display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+        margin-top: 4px;
+    }
+    .avatar-api-line code {
+        flex: 1; min-width: 220px; padding: 8px 10px; border-radius: 8px;
+        border: 1px solid var(--border); background: rgba(0, 0, 0, .2);
+        color: var(--muted); font-family: 'Cascadia Code', Consolas, monospace;
+        font-size: .72rem; line-height: 1.5; word-break: break-all;
+    }
+    select {
+        width: 100%; background: rgba(0,0,0,.25); color: var(--text); border: 1px solid var(--border);
+        border-radius: 9px; padding: 9px 12px; font-size: .88rem; outline: none; font-family: inherit;
+    }
+    select:focus { border-color: var(--accent); }
     .identity-name { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
     .identity-name b { font-size: 1.05rem; }
     .badge { font-size: .68rem; padding: 2px 8px; border-radius: 99px; border: 1px solid var(--border); color: var(--muted); }
@@ -101,6 +128,9 @@
     html[data-theme="light"] .token-line code {
         background: #f8fafc; border-color: rgba(16, 24, 40, .14); color: #1b2436;
     }
+    html[data-theme="light"] .avatar-api-line code {
+        background: #f8fafc; border-color: rgba(16, 24, 40, .14);
+    }
     @media (max-width: 600px) {
         body { padding: 14px; }
         .panel { padding: 16px; }
@@ -124,6 +154,7 @@
             <span class="who" id="whoami">加载中…</span>
             <a href="/" id="homeLink">前台</a>
             <a href="/admin" id="workspaceLink">返回后台</a>
+            <a href="/admin/v2" id="v2Link">V2 图库</a>
             <a href="/admin/users" id="usersLink" hidden>账户管理</a>
             <button class="theme-toggle" type="button" data-theme-toggle>☀️</button>
             <button class="ghost mini" id="logoutBtn">退出登录</button>
@@ -132,6 +163,7 @@
 
     <section class="panel identity-panel">
         <div class="identity">
+            <img class="avatar" id="avatarSmall" alt="当前头像">
             <div class="identity-copy">
                 <div class="identity-name">
                     <b id="displayNameText">…</b>
@@ -158,11 +190,46 @@
 
     <section class="panel">
         <div class="section-head">
+            <h2>头像</h2>
+            <span class="status" id="avatarStatus">默认头像</span>
+        </div>
+        <div class="avatar-row">
+            <img class="avatar-large" id="avatarLarge" alt="当前头像">
+            <div class="avatar-fields">
+                <p class="hint" id="avatarHint">上传一张图片作为头像，其他服务可以直接使用头像接口。默认输出压缩后的 JPG，添加 <code>?type=png</code> 输出 PNG；如果原图勾选了接口水印，头像接口也会带水印。</p>
+                <div class="field">
+                    <label for="avatarFile">从本机上传头像</label>
+                    <input type="file" id="avatarFile" accept="image/png,image/jpeg,image/webp,image/gif,image/avif">
+                    <span class="field-help">新头像会进入图库审核；审核通过前访客看到默认头像，本人可以立即预览。</span>
+                </div>
+                <div class="row">
+                    <button type="button" id="uploadAvatarBtn">上传并设为头像</button>
+                    <button type="button" class="ghost" id="clearAvatarBtn">恢复默认头像</button>
+                </div>
+                <div class="field" style="margin-top:16px;">
+                    <label for="avatarImageSelect">或从我的图片中选择</label>
+                    <select id="avatarImageSelect"></select>
+                </div>
+                <div class="row">
+                    <button type="button" class="ghost" id="setAvatarBtn">设为头像</button>
+                </div>
+                <p class="field-help" id="avatarSelectedHint">尚未选择头像图片。</p>
+                <div class="avatar-api-line">
+                    <code id="avatarApiUrl">/api/avatar</code>
+                    <button type="button" class="ghost mini" id="copyAvatarApiBtn">复制接口</button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="panel">
+        <div class="section-head">
             <h2>API Token</h2>
             <span class="status" id="tokenStatus">未创建</span>
         </div>
-        <p class="hint">用于访问 <code>/random</code>、<code>/api/v1</code>、<code>/list</code> 等接口。Token 只会在创建或重新生成时显示一次，请立即复制保存。</p>
+        <p class="hint">用于访问 <code>/api/v1rd</code>、<code>/api/v2rd</code>、<code>/api/v1</code>、<code>/api/v2</code>、<code>/list</code> 等接口。Token 只会在创建时显示一次，请立即复制保存。</p>
         <p class="field-help" id="tokenMeta">尚未创建 API Token。</p>
+        <p class="field-help">Token 会保存在当前浏览器，复制接口地址时会自动带上；换浏览器或清除站点数据后需要重新创建 Token。</p>
         <div class="row">
             <button type="button" id="createTokenBtn">创建 Token</button>
             <button type="button" class="ghost" id="revokeTokenBtn" disabled>吊销 Token</button>
@@ -257,9 +324,11 @@
 
     document.getElementById('homeLink').href = BASE + '/';
     document.getElementById('workspaceLink').href = BASE + '/admin';
+    document.getElementById('v2Link').href = BASE + '/admin/v2';
     document.getElementById('usersLink').href = BASE + '/admin/users';
 
     let state = null;
+    let avatarImages = [];
     let mailConfigured = false;
     let toastTimer = null;
     const cooldowns = { email: null, password: null };
@@ -295,6 +364,55 @@
         return data;
     };
 
+    const avatarUrl = (user) => {
+        if (!user) return BASE + '/api/avatar';
+        return BASE + '/api/avatar?uid=' + encodeURIComponent(user.id) +
+            '&v=' + encodeURIComponent(user.updatedAt || Date.now());
+    };
+
+    const loadAvatarImages = async () => {
+        try {
+            const data = await request('/profile/avatar-images');
+            avatarImages = data.images || [];
+        } catch {
+            avatarImages = [];
+        }
+        renderAvatarPicker();
+    };
+
+    const renderAvatarPicker = () => {
+        if (!state) return;
+
+        const selected = avatarImages.find((image) => image.id === state.user.avatarImageId);
+        const options = ['<option value="">请选择我上传的图片</option>'];
+
+        for (const image of avatarImages) {
+            const title = image.title || image.id;
+            const status = image.status === 'approved' ? '已通过' : (image.status === 'pending' ? '待审核' : '已拒绝');
+            options.push('<option value="' + esc(image.id) + '"' +
+                (image.selected ? ' selected' : '') + '>' +
+                esc(title) + ' · ' + esc(status) + '</option>');
+        }
+
+        $('avatarImageSelect').innerHTML = options.join('');
+        const selectedState = !selected
+            ? ''
+            : (selected.status === 'approved'
+                ? '已通过审核'
+                : (selected.status === 'rejected'
+                    ? '已拒绝，访客看到默认头像'
+                    : '待审核，访客暂时看到默认头像'));
+        $('avatarSelectedHint').textContent = selected
+            ? '当前头像：' + (selected.title || selected.id) + '（' + selectedState + '）'
+            : '尚未选择头像图片，当前使用默认头像。';
+
+        const status = selected
+            ? (selected.status === 'approved' ? '已设置' : (selected.status === 'rejected' ? '已拒绝' : '待审核'))
+            : '默认头像';
+        $('avatarStatus').textContent = status;
+        $('avatarStatus').className = 'status ' + (selected ? (selected.status === 'approved' ? 'ok' : 'warn') : '');
+    };
+
     const fmtDate = (value) => {
         if (!value) return '-';
         const date = new Date(value);
@@ -321,6 +439,13 @@
         $('accountMeta').textContent = '@' + user.username + ' · ' + roleText + ' · 加入于 ' + fmtDate(user.createdAt);
         $('usernameText').textContent = user.username;
 
+        const currentAvatar = avatarUrl(user);
+        $('avatarSmall').src = currentAvatar;
+        $('avatarLarge').src = currentAvatar;
+        $('avatarApiUrl').textContent = location.origin + BASE + '/api/avatar?user=' +
+            encodeURIComponent(user.username);
+        renderAvatarPicker();
+
         const hasToken = Boolean(user.hasApiToken);
         const bannedUntil = user.tokenBannedUntil && Date.parse(user.tokenBannedUntil) > Date.now()
             ? user.tokenBannedUntil
@@ -329,11 +454,13 @@
 
         $('tokenStatus').textContent = tokenBanned ? '已封禁' : (hasToken ? '已创建' : '未创建');
         $('tokenStatus').className = 'status ' + (tokenBanned ? 'warn' : (hasToken ? 'ok' : ''));
+        const storedToken = window.ImgApiToken?.get(user.id) || '';
         $('tokenMeta').textContent = hasToken
             ? 'Token 尾号 ' + (user.apiTokenHint || '-') +
                 ' · 创建于 ' + fmtDate(user.apiTokenCreatedAt) +
                 (user.tokenRateLimitHits > 0 ? ' · 限流触发 ' + user.tokenRateLimitHits + ' 次' : '') +
-                (tokenBanned ? ' · 已封禁至 ' + fmtDate(bannedUntil) : '')
+                (tokenBanned ? ' · 已封禁至 ' + fmtDate(bannedUntil) : '') +
+                (storedToken ? '' : ' · 当前浏览器未保存完整 Token')
             : '尚未创建 API Token。';
         $('tokenNote').textContent = tokenBanned
             ? (hasToken
@@ -347,6 +474,7 @@
 
         $('workspaceLink').href = BASE + (role === 'moderator' ? '/admin/review' : '/admin');
         $('workspaceLink').textContent = role === 'moderator' ? '返回审核台' : '返回后台';
+        $('v2Link').hidden = role === 'moderator';
         $('usersLink').hidden = !['owner', 'admin'].includes(role);
 
         $('emailTitle').textContent = hasEmail ? '修改邮箱' : '绑定邮箱';
@@ -408,6 +536,7 @@
         state = data;
         mailConfigured = Boolean(data.mailConfigured);
         render();
+        await loadAvatarImages();
     };
 
     const startCooldown = (kind) => {
@@ -439,6 +568,81 @@
             state = data;
             render();
             toast('个人资料已保存');
+        } catch (error) {
+            toast(error.message, true);
+        }
+    };
+
+    $('uploadAvatarBtn').onclick = async () => {
+        const file = $('avatarFile').files[0];
+        if (!file) {
+            toast('请先选择一张头像图片', true);
+            return;
+        }
+
+        const form = new FormData();
+        form.append('file', file);
+        const button = $('uploadAvatarBtn');
+        button.disabled = true;
+        button.textContent = '上传中…';
+
+        try {
+            const response = await fetch(API + '/profile/avatar/upload', {
+                method: 'POST',
+                credentials: 'same-origin',
+                body: form
+            });
+            if (response.status === 401) {
+                location.href = BASE + '/login';
+                return;
+            }
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.message || ('上传失败 ' + response.status));
+
+            state = data.profile;
+            mailConfigured = Boolean(data.profile.mailConfigured);
+            $('avatarFile').value = '';
+            render();
+            await loadAvatarImages();
+            toast(data.duplicate ? '图片已存在，已设为头像' : '头像上传成功，等待审核');
+        } catch (error) {
+            toast(error.message, true);
+        } finally {
+            button.disabled = false;
+            button.textContent = '上传并设为头像';
+        }
+    };
+
+    $('setAvatarBtn').onclick = async () => {
+        const imageId = $('avatarImageSelect').value;
+        if (!imageId) {
+            toast('请先选择一张自己上传的图片', true);
+            return;
+        }
+
+        try {
+            const data = await request('/profile/avatar', {
+                method: 'PUT',
+                json: { imageId }
+            });
+            state = data.profile;
+            mailConfigured = Boolean(data.profile.mailConfigured);
+            render();
+            await loadAvatarImages();
+            toast('头像已更新');
+        } catch (error) {
+            toast(error.message, true);
+        }
+    };
+
+    $('clearAvatarBtn').onclick = async () => {
+        try {
+            const data = await request('/profile/avatar', { method: 'DELETE' });
+            state = data.profile;
+            mailConfigured = Boolean(data.profile.mailConfigured);
+            render();
+            await loadAvatarImages();
+            toast('已恢复默认头像');
         } catch (error) {
             toast(error.message, true);
         }
@@ -612,6 +816,7 @@
         try {
             const data = await request('/profile/token', { method: 'POST' });
             state = data.profile;
+            window.ImgApiToken?.set(state.user.id, data.token);
             render();
             showTokenDialog(data.token);
             toast('Token 已创建');
@@ -625,6 +830,7 @@
 
         try {
             const data = await request('/profile/token/revoke', { method: 'POST' });
+            window.ImgApiToken?.clear(state.user.id);
             state = data.profile;
             render();
             toast('Token 已吊销，请重新创建');
@@ -651,6 +857,15 @@
     $('tokenDialog').addEventListener('click', (event) => {
         if (event.target === $('tokenDialog')) closeTokenDialog();
     });
+
+    $('copyAvatarApiBtn').onclick = async () => {
+        try {
+            await copyToClipboard($('avatarApiUrl').textContent);
+            toast('头像接口地址已复制');
+        } catch {
+            toast('复制失败，请手动选择地址', true);
+        }
+    };
 
     $('logoutBtn').onclick = async () => {
         try {

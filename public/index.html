@@ -129,6 +129,7 @@
         gap: 8px;
         border-radius: 12px;
         padding: 12px 21px;
+        font-family: inherit;
         font-size: .9rem;
         font-weight: 600;
         transition: .18s;
@@ -305,6 +306,7 @@
             <div class="actions">
                 <a class="btn primary" href="/register" id="primaryAction">创建账户</a>
                 <a class="btn ghost" href="/login" id="secondaryAction">登录</a>
+                <button type="button" class="btn ghost" id="copyApiBtn">📋 复制 API</button>
                 <a class="btn ghost docs" href="/docs" id="docsAction">📖 使用文档</a>
             </div>
 
@@ -359,7 +361,16 @@
     const shuffleBtn = $('shuffleBtn');
     let allowRegistration = true;
     let galleryCount = null;
+    let currentUser = null;
+    let currentObjectUrl = '';
     const ROLE_LABELS = { owner: '站长', admin: '管理员', moderator: '审核员', member: '成员' };
+
+    const clearObjectUrl = () => {
+        if (currentObjectUrl) {
+            URL.revokeObjectURL(currentObjectUrl);
+            currentObjectUrl = '';
+        }
+    };
 
     const applySiteName = (name) => {
         const value = String(name || '').trim() || '梦星的小图床';
@@ -371,6 +382,7 @@
     };
 
     const setPlaceholder = (text) => {
+        clearObjectUrl();
         image.hidden = true;
         image.removeAttribute('src');
         placeholder.hidden = false;
@@ -384,21 +396,30 @@
         image.classList.add('loading');
 
         try {
-            const response = await fetch(BASE + '/random?format=json&_=' + Date.now(), { cache: 'no-store' });
+            // 首页使用内部图片出口，仅从允许前台展示的图片中随机。
+            const response = await fetch(BASE + '/api/getimg?format=json&front=1&_=' + Date.now(), { cache: 'no-store' });
 
             if (response.status === 404) {
-                setPlaceholder('图库还没有已通过审核的图片。登录后上传并等待审核通过吧。');
+                setPlaceholder('图库还没有适合前台展示的已审核图片。登录后上传并等待审核通过吧。');
                 return;
             }
             if (!response.ok) throw new Error('随机接口返回 ' + response.status);
 
             const data = await response.json();
-            const src = data.url || data.webp || data.origin;
+            const src = data.url || data.webp;
             if (!src) throw new Error('随机接口没有返回图片地址');
+
+            // 通过 fetch 取回图片后用 blob URL 展示，避免内部图片出口直接出现在 DOM 中。
+            const imageResponse = await fetch(src, { cache: 'no-store', credentials: 'same-origin' });
+            if (!imageResponse.ok) throw new Error('图片接口返回 ' + imageResponse.status);
+            const blob = await imageResponse.blob();
+            const objectUrl = URL.createObjectURL(blob);
 
             const next = new Image();
             next.onload = () => {
-                image.src = src;
+                clearObjectUrl();
+                currentObjectUrl = objectUrl;
+                image.src = objectUrl;
                 image.hidden = false;
                 image.classList.remove('loading');
                 placeholder.hidden = true;
@@ -409,10 +430,11 @@
                 shuffleBtn.disabled = false;
             };
             next.onerror = () => {
+                URL.revokeObjectURL(objectUrl);
                 setPlaceholder('图片加载失败，请稍后再试。');
                 shuffleBtn.disabled = false;
             };
-            next.src = src;
+            next.src = objectUrl;
         } catch (error) {
             setPlaceholder('暂时没有取到图片：' + error.message);
             shuffleBtn.disabled = false;
@@ -495,8 +517,10 @@
             if (data.siteName) applySiteName(data.siteName);
 
             if (data.authenticated && data.user) {
+                currentUser = data.user;
                 applyUser(data.user);
             } else {
+                currentUser = null;
                 applyGuest();
             }
         } catch {
@@ -504,8 +528,101 @@
         }
     };
 
+    const copyText = async (text) => {
+        if (navigator.clipboard?.writeText) {
+            try {
+                await navigator.clipboard.writeText(text);
+                return;
+            } catch {
+                // HTTP 或浏览器限制时回退
+            }
+        }
+
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.setAttribute('readonly', '');
+        textarea.style.position = 'fixed';
+        textarea.style.top = '-1000px';
+        document.body.appendChild(textarea);
+        textarea.select();
+        const ok = document.execCommand('copy');
+        textarea.remove();
+        if (!ok) throw new Error('copy failed');
+    };
+
+    const resolveCopyToken = async () => {
+        if (!currentUser) return { token: '' };
+
+        let token = window.ImgApiToken?.get(currentUser.id) || '';
+        if (token) {
+            try {
+                const check = await fetch(API + '/profile/token/verify', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ token })
+                });
+                if (check.ok) return { token };
+                if (check.status === 401 || check.status === 403) {
+                    window.ImgApiToken?.clear(currentUser.id);
+                    token = '';
+                } else {
+                    return { token };
+                }
+            } catch {
+                return { token };
+            }
+        }
+
+        if (!confirm('当前浏览器没有保存有效的完整 API Token。\n复制带 Token 的接口需要重新生成 Token，旧 Token 会立即失效。继续吗？')) {
+            return { token: '', cancelled: true };
+        }
+
+        try {
+            const response = await fetch(API + '/profile/token/reissue', {
+                method: 'POST',
+                credentials: 'same-origin'
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok || !data.token) throw new Error(data.message || 'Token 生成失败');
+            window.ImgApiToken?.set(currentUser.id, data.token);
+            return { token: data.token };
+        } catch {
+            return { token: '' };
+        }
+    };
+
+    const copyApi = async () => {
+        const button = $('copyApiBtn');
+        const original = button.textContent;
+        button.disabled = true;
+        button.textContent = '处理中…';
+
+        const result = await resolveCopyToken();
+        if (result.cancelled) {
+            button.disabled = false;
+            button.textContent = '已取消';
+            setTimeout(() => { button.textContent = original; }, 1800);
+            return;
+        }
+
+        const url = location.origin + BASE + '/api/v1rd' +
+            (result.token ? '?token=' + encodeURIComponent(result.token) : '');
+
+        try {
+            await copyText(url);
+            button.textContent = result.token ? '✅ 已复制（带 Token）' : '✅ 已复制（无 Token）';
+        } catch {
+            button.textContent = '复制失败';
+        }
+
+        button.disabled = false;
+        setTimeout(() => { button.textContent = original; }, 1800);
+    };
+
     image.addEventListener('click', () => loadRandom());
     shuffleBtn.addEventListener('click', () => loadRandom());
+    $('copyApiBtn').addEventListener('click', copyApi);
 
     $('logoutBtn').addEventListener('click', async () => {
         try {
